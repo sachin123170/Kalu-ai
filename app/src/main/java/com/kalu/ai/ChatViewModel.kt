@@ -270,6 +270,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         notesStore.save(notes.toList())
     }
 
+    /** Notes can also be added by the floating bubble service, so reload when the app comes back. */
+    fun reloadNotes() {
+        notes.clear()
+        notes.addAll(notesStore.load())
+    }
+
     fun addNoteFromUi(text: String) {
         if (text.isNotBlank()) addNote(text.trim())
     }

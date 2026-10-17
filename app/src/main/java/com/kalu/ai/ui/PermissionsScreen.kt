@@ -2,6 +2,7 @@ package com.kalu.ai.ui
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
@@ -62,6 +63,7 @@ fun PermissionsScreen(onBack: () -> Unit) {
     val notifOk = remember(tick) {
         !notifNeeded || ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
+    val overlayOk = remember(tick) { Settings.canDrawOverlays(ctx) }
     val a11yEnabled = remember(tick, connected) { KaluAccess.isEnabledInSettings(ctx) }
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
@@ -101,6 +103,13 @@ fun PermissionsScreen(onBack: () -> Unit) {
             if (connected) "✅ Service chal rahi hai" else if (a11yEnabled) "⏳ Enabled, connect ho rahi hai" else "⚪ OFF",
             "Accessibility settings kholo"
         ) { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+
+        PermCard(
+            "🫧 Floating mic bubble",
+            "Dusre apps ke upar ek chhota mic bubble dikhta hai. Bubble par tap karke bolo, KALU sunega aur kaam karega. Mic tabhi chalta hai jab tum bubble tap karo; sunte waqt bubble hara ho jata hai. 'Display over other apps' permission lagti hai. Band karne ke liye notification mein Stop dabao.",
+            if (overlayOk) "✅ Permission mili hui hai" else "❌ Abhi nahi mili",
+            if (overlayOk) null else "Permission do"
+        ) { ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 
         PermCard(
             "⏰ Alarm / Timer",

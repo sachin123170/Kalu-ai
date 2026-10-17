@@ -99,3 +99,6 @@ KALU's own screen is the active window while you type, so screen commands wait 4
 - Mic button says no recognition service: install/enable "Speech Recognition & Synthesis from Google".
 - Gemini 400/403: key wrong or API not enabled. 404: model name. 429: quota.
 - "App not installed": uninstall older KALU AI first; make sure you installed the .apk, not the zip.
+
+## Floating mic bubble (v1.1)
+Chat screen > chip "🫧 Bubble". Allow "Display over other apps" and Mic, then tap the chip again. A bubble floats over other apps; tap it, speak, and KALU acts (open apps, YouTube, alarm, notes, screen control, or asks Gemini and speaks the answer in 1-3 sentences). It listens only after you tap; the bubble turns green while listening. Stop from the notification. Sensitive screen clicks (send/pay/delete...) are refused from the bubble and must be confirmed inside the app. Bubble chats are not saved to history and have no memory.

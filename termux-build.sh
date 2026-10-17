@@ -17,6 +17,8 @@ echo "RAM: $((MEM_KB/1024)) MB"
 if [ "$MEM_KB" -lt 3500000 ]; then
   echo "WARNING: 4 GB se kam RAM. Build beech mein 'Killed' ho sakta hai. GitHub Actions wala tareeka (README) behtar hai."
 fi
+FREE_MB=$(df -m "$HOME" | awk 'NR==2{print $4}')
+[ "$FREE_MB" -gt 3000 ] || die "Kam se kam 3 GB free storage chahiye (abhi $FREE_MB MB)."
 
 say "2/7 Packages"
 pkg update -y

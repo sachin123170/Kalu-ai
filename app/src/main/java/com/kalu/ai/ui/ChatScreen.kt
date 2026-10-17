@@ -3,6 +3,9 @@
 package com.kalu.ai.ui
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -77,6 +80,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.kalu.ai.ChatMessage
 import com.kalu.ai.ChatViewModel
+import com.kalu.ai.FloatingBubbleService
 import com.kalu.ai.KaluAccess
 import com.kalu.ai.Mode
 import com.kalu.ai.VoiceState
@@ -98,10 +102,14 @@ fun ChatScreen(
     var afterMicPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
     val armed by KaluAccess.armed.collectAsState()
     val connected by KaluAccess.serviceConnected.collectAsState()
+    val bubbleOn by FloatingBubbleService.running.collectAsState()
     val messages = vm.messages
 
     DisposableEffect(activity) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) vm.onAppBackground() }
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_STOP) vm.onAppBackground()
+            if (e == Lifecycle.Event.ON_START) vm.reloadNotes()
+        }
         activity.lifecycle.addObserver(obs)
         onDispose { activity.lifecycle.removeObserver(obs) }
     }
@@ -248,6 +256,22 @@ fun ChatScreen(
                 selected = vm.continuous,
                 onClick = { if (vm.continuous) vm.toggleContinuous() else withMic { vm.toggleContinuous() } },
                 label = { Text("🎙 Continuous") }
+            )
+            FilterChip(
+                selected = bubbleOn,
+                onClick = {
+                    if (bubbleOn) {
+                        FloatingBubbleService.stop(ctx)
+                    } else if (!Settings.canDrawOverlays(ctx)) {
+                        vm.notice = "'Display over other apps' allow karo, phir wapas aakar Bubble dabao."
+                        ctx.startActivity(
+                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName))
+                        )
+                    } else {
+                        withMic { FloatingBubbleService.start(ctx) }
+                    }
+                },
+                label = { Text("🫧 Bubble") }
             )
             Mode.values().forEach { m ->
                 FilterChip(selected = vm.mode == m, onClick = { vm.mode = m }, label = { Text(m.label) })

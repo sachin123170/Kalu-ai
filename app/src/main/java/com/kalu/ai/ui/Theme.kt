@@ -1,6 +1,7 @@
 package com.kalu.ai.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -20,5 +21,8 @@ private val KaluColors = darkColorScheme(
 
 @Composable
 fun KaluTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = KaluColors, content = content)
+    MaterialTheme(colorScheme = KaluColors) {
+        // Surface sets the default text/icon colour (light on dark) for everything inside.
+        Surface(color = MaterialTheme.colorScheme.background, content = content)
+    }
 }
