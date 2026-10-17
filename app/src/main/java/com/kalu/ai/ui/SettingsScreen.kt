@@ -61,6 +61,7 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
     var busy by remember { mutableStateOf(false) }
     var style by remember { mutableStateOf(p.style) }
     var language by remember { mutableStateOf(p.language) }
+    var creator by remember { mutableStateOf(p.creatorName) }
     var speak by remember { mutableStateOf(p.speakReplies) }
     var wakeOn by remember { mutableStateOf(p.wakeEnabled) }
     var wakePhrase by remember { mutableStateOf(p.wakePhrase) }
@@ -179,6 +180,13 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
         )
 
         SectionTitle("Style aur language")
+        OutlinedTextField(
+            value = creator,
+            onValueChange = { creator = it; p.creatorName = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Tumhara naam (KALU ko batao kisne banaya)") },
+            singleLine = true
+        )
         ChipRow(listOf("friendly" to "Friendly", "short" to "Short", "detailed" to "Detailed"), style) { style = it; p.style = it }
         ChipRow(listOf("hinglish" to "Hinglish", "hindi" to "Hindi", "english" to "English"), language) { language = it; p.language = it }
 

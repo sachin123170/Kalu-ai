@@ -96,5 +96,10 @@ class Prefs(context: Context) {
         get() = sp.getString("wake_phrase", "kalu") ?: "kalu"
         set(v) = sp.edit().putString("wake_phrase", v.trim()).apply()
 
+    /** Name of the person who built this app; KALU says it when asked who made it. */
+    var creatorName: String
+        get() = sp.getString("creator", "") ?: ""
+        set(v) = sp.edit().putString("creator", v.trim()).apply()
+
     fun resetAll() = sp.edit().clear().apply()
 }
