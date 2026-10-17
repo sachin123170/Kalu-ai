@@ -68,6 +68,11 @@ fun PermissionsScreen(onBack: () -> Unit) {
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
+    val msgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tick++ }
+    val msgOk = remember(tick) {
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+    }
 
     Column(
         Modifier
@@ -103,6 +108,13 @@ fun PermissionsScreen(onBack: () -> Unit) {
             if (connected) "✅ Service chal rahi hai" else if (a11yEnabled) "⏳ Enabled, connect ho rahi hai" else "⚪ OFF",
             "Accessibility settings kholo"
         ) { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+
+        PermCard(
+            "💬 Contacts + SMS (message bhejna)",
+            "'Rahul ko sms bhejo: ...' ya 'Rahul ko whatsapp karo: ...' ke liye contact ka naam dhoondhne (Contacts) aur SMS bhejne (SMS) ki permission. KALU har baar bhejne se pehle tumse confirm karta hai. Android 13+ par sideloaded app ke liye permission grey ho to Settings, Apps, KALU AI, upar right ⋮, 'Allow restricted settings' dabao.",
+            if (msgOk) "✅ Mili hui hai" else "❌ Abhi nahi mili",
+            if (msgOk) null else "Allow karo"
+        ) { msgLauncher.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.SEND_SMS)) }
 
         PermCard(
             "🫧 Floating mic bubble",

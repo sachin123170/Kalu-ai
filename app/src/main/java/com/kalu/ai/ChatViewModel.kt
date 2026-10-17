@@ -159,9 +159,31 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     speak = false
                 )
             }
+            is Command.SendSms -> planMessage(Messaging.sms(ctx, cmd.name, cmd.body))
+            is Command.SendWhatsApp -> planMessage(Messaging.whatsapp(ctx, cmd.name, cmd.body))
             else -> screenCommand(cmd)
         }
         return true
+    }
+
+    private fun planMessage(plan: MsgPlan) {
+        when (plan) {
+            is MsgPlan.Error -> botSay(plan.message)
+            is MsgPlan.Confirm -> pending = Pending(plan.prompt) {
+                botSay(plan.run())
+                if (plan.autoSendAfterMs > 0) {
+                    val svc = KaluAccess.service
+                    if (svc != null && KaluAccess.armed.value) {
+                        viewModelScope.launch {
+                            delay(plan.autoSendAfterMs)
+                            botSay(svc.execute(Command.SendMessage))
+                        }
+                    } else {
+                        botSay("Chat khul gayi aur message likha hua hai. Send tum dabao, ya Screen control ON karke 'send karo' bolo.", speak = false)
+                    }
+                }
+            }
+        }
     }
 
     private fun askBrain(text: String) {
@@ -221,6 +243,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!KaluAccess.armed.value) {
             botSay("Screen control abhi OFF hai. Upar wala 'Screen control' switch ON karo, phir command bolo.")
+            return
+        }
+        if (cmd is Command.SendMessage) {
+            pending = Pending("Ye message bhej dun? (Send button dabaunga)") { runDelayed(cmd) }
             return
         }
         if (cmd is Command.ClickText && sensitive.any { cmd.text.lowercase(Locale.ROOT).contains(it) }) {

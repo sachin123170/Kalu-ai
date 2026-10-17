@@ -102,3 +102,9 @@ KALU's own screen is the active window while you type, so screen commands wait 4
 
 ## Floating mic bubble (v1.1)
 Chat screen > chip "🫧 Bubble". Allow "Display over other apps" and Mic, then tap the chip again. A bubble floats over other apps; tap it, speak, and KALU acts (open apps, YouTube, alarm, notes, screen control, or asks Gemini and speaks the answer in 1-3 sentences). It listens only after you tap; the bubble turns green while listening. Stop from the notification. Sensitive screen clicks (send/pay/delete...) are refused from the bubble and must be confirmed inside the app. Bubble chats are not saved to history and have no memory.
+
+## Messaging (v1.3)
+- `Rahul ko sms bhejo: kal milte hain` : looks up the contact, asks you to confirm, then sends the SMS (needs Contacts + SMS permission).
+- `Rahul ko whatsapp karo: kal milte hain` : confirms, opens the WhatsApp chat with the text filled in, and if Screen control is ON presses Send after 4 seconds. Otherwise you press Send. A 10-digit number without country code is assumed to be Indian (+91).
+- Any app (WhatsApp, Instagram...): open the chat, then `type: kal milte hain` (types into the text box) and `send karo` (presses Send; always confirmed). From the bubble, confirmation is by voice: tap the bubble and say "haan" or "nahi".
+- Nothing is ever sent without your confirmation. Apps change their screens, so Send may not be found; KALU then says so.

@@ -17,6 +17,10 @@ sealed class Command {
     object ScrollUp : Command()
     object ReadScreen : Command()
     data class ClickText(val text: String) : Command()
+    data class TypeText(val text: String) : Command()
+    object SendMessage : Command()
+    data class SendSms(val name: String, val body: String) : Command()
+    data class SendWhatsApp(val name: String, val body: String) : Command()
 }
 
 /** Local, offline parser for Hindi/Hinglish/English commands. Anything unmatched goes to Gemini. */
@@ -29,6 +33,7 @@ object CommandRouter {
     private val down = setOf("scroll down", "neeche scroll karo", "niche scroll karo", "scroll karo", "neeche jao")
     private val up = setOf("scroll up", "upar scroll karo", "upar jao")
     private val read = setOf("read screen", "screen padho", "screen par kya hai", "screen read karo")
+    private val sendSet = setOf("send karo", "send kar do", "send", "bhej do", "bhejo", "send message")
     private val showNotes = setOf("mere notes", "notes dikhao", "show notes", "notes", "my notes", "notes dikha do")
 
     private fun words(s: String) = s.trim().split(Regex("\\s+")).size
@@ -46,6 +51,7 @@ object CommandRouter {
             in up -> return Command.ScrollUp
             in read -> return Command.ReadScreen
             in showNotes -> return Command.ShowNotes
+            in sendSet -> return Command.SendMessage
         }
 
         // Notes
@@ -54,6 +60,26 @@ object CommandRouter {
         }
         Regex("^note\\s+(?:likho|karo)\\s+(.+)$", I).find(s)?.let {
             return Command.SaveNote(it.groupValues[1].trim())
+        }
+
+        // Messaging (WhatsApp / SMS). Always confirmed with the user before anything is sent.
+        Regex("^(.+?)\\s+ko\\s+(?:whatsapp|watsapp|wa)\\s+(?:message\\s+|msg\\s+)?(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+        Regex("^(?:whatsapp|watsapp)\\s+(?:to\\s+)?(\\S+)\\s*[:\\-]\\s*(.+)$", I)
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+        Regex("^(.+?)\\s+ko\\s+sms\\s+(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
+            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+        Regex("^sms\\s+(?:to\\s+)?(\\S+)\\s*[:\\-]\\s*(.+)$", I)
+            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+        Regex("^(.+?)\\s+ko\\s+(?:message|msg|text)\\s+(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+
+        // Type into the focused text box (screen control)
+        Regex("^(?:type|likho|write|isme likho|yaha likho)\\s*[:\\-]\\s*(.+)$", I).find(s)?.let {
+            return Command.TypeText(it.groupValues[1].trim())
+        }
+        Regex("^(?:type karo|type kar do|likh do|likho)\\s+(.+)$", I).find(s)?.let {
+            return Command.TypeText(it.groupValues[1].trim())
         }
 
         // Timer

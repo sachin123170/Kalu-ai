@@ -32,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -69,6 +70,8 @@ class FloatingBubbleService : Service() {
     private var bubble: BubbleView? = null
     private var label: TextView? = null
     private var voiceState = VoiceState.IDLE
+    private var awaiting: (() -> Unit)? = null
+    private var awaitingAt = 0L
 
     private val sensitive = listOf(
         "send", "bhej", "delete", "hatao", "remove", "pay", "buy", "purchase", "order", "checkout",
@@ -257,6 +260,13 @@ class FloatingBubbleService : Service() {
         val text = raw.trim()
         if (text.isEmpty()) return
         showLabel("🗣 $text")
+        val pendingAction = awaiting
+        if (pendingAction != null) {
+            awaiting = null
+            if (System.currentTimeMillis() - awaitingAt < 60000 && isYes(text)) pendingAction()
+            else reply("Theek hai, cancel kar diya.")
+            return
+        }
         val cmd = CommandRouter.parse(text)
         if (cmd != null && runCommand(cmd)) return
         askGemini(text)
@@ -297,6 +307,8 @@ class FloatingBubbleService : Service() {
                 val list = notes.load().take(5)
                 reply(if (list.isEmpty()) "Abhi koi note nahi hai." else "Tumhare notes: " + list.joinToString(". ") { it.text.take(60) })
             }
+            is Command.SendSms -> planMessage(Messaging.sms(this, cmd.name, cmd.body))
+            is Command.SendWhatsApp -> planMessage(Messaging.whatsapp(this, cmd.name, cmd.body))
             else -> screen(cmd)
         }
         return true
@@ -312,11 +324,43 @@ class FloatingBubbleService : Service() {
             reply("Screen control OFF hai. KALU app mein switch ON karo.")
             return
         }
+        if (cmd is Command.SendMessage) {
+            ask("Ye message bhej dun?") { reply(svc.execute(cmd)) }
+            return
+        }
         if (cmd is Command.ClickText && sensitive.any { cmd.text.lowercase(Locale.ROOT).contains(it) }) {
-            reply("Ye sensitive button hai. Ise KALU app mein confirm karke karo.")
+            ask("'${cmd.text}' dabaun? Ye sensitive ho sakta hai.") { reply(svc.execute(cmd)) }
             return
         }
         reply(svc.execute(cmd))
+    }
+
+    private fun ask(prompt: String, action: () -> Unit) {
+        awaiting = action
+        awaitingAt = System.currentTimeMillis()
+        reply("$prompt Bubble tap karke 'haan' ya 'nahi' bolo.")
+    }
+
+    private fun isYes(text: String): Boolean {
+        val w = text.lowercase(Locale.ROOT).split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }.toSet()
+        if (w.any { it in setOf("nahi", "nahin", "no", "mat", "cancel", "ruko") }) return false
+        return w.any { it in setOf("haan", "han", "ha", "haa", "yes", "ok", "okay", "bhejo", "bhej", "karo", "kar") }
+    }
+
+    private fun planMessage(plan: MsgPlan) {
+        when (plan) {
+            is MsgPlan.Error -> reply(plan.message)
+            is MsgPlan.Confirm -> ask(plan.prompt) {
+                reply(plan.run())
+                val svc = KaluAccess.service
+                if (plan.autoSendAfterMs > 0 && svc != null && KaluAccess.armed.value) {
+                    scope.launch {
+                        delay(plan.autoSendAfterMs)
+                        reply(svc.execute(Command.SendMessage))
+                    }
+                }
+            }
+        }
     }
 
     private fun askGemini(text: String) {

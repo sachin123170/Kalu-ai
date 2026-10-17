@@ -5,6 +5,7 @@ import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -46,6 +47,10 @@ class KaluAccessibilityService : AccessibilityService() {
             is Command.ClickText ->
                 if (click(cmd.text)) "'${cmd.text}' dabaa diya. ✅" else "Screen par '${cmd.text}' nahi mila ya dab nahi paya."
             is Command.ReadScreen -> readScreen()
+            is Command.TypeText ->
+                if (typeText(cmd.text)) "Likh diya. ✅" else "Koi text box nahi mila. Pehle text box par tap karo."
+            is Command.SendMessage ->
+                if (clickSend()) "Send dabaa diya. ✅" else "Send button nahi mila."
             else -> "Ye screen control ka command nahi hai."
         }
     }
@@ -94,6 +99,38 @@ class KaluAccessibilityService : AccessibilityService() {
         val r = Rect()
         target.getBoundsInScreen(r)
         return tap(r.centerX().toFloat(), r.centerY().toFloat())
+    }
+
+    private fun typeText(text: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable && !it.isPassword }
+        val target = focused ?: findEditable(root) ?: return false
+        val args = Bundle()
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        return target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    private fun findEditable(n: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (n.isEditable && n.isVisibleToUser && !n.isPassword) return n
+        for (i in 0 until n.childCount) {
+            val c = n.getChild(i) ?: continue
+            findEditable(c)?.let { return it }
+        }
+        return null
+    }
+
+    private fun clickSend(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        for (label in listOf("Send", "भेजें", "Bhejo")) {
+            val node = root.findAccessibilityNodeInfosByText(label)
+                .firstOrNull { it.isVisibleToUser && it.isEnabled && !it.isPassword } ?: continue
+            var n: AccessibilityNodeInfo? = node
+            while (n != null) {
+                if (n.isClickable) return n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                n = n.parent
+            }
+        }
+        return false
     }
 
     private fun tap(x: Float, y: Float): Boolean {
