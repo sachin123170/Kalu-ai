@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">KALU AI</string>
+    <string name="a11y_description">KALU AI sirf tab tap, scroll, back jaise kaam karta hai jab aap app mein Screen control ON karte ho aur command bolte ho. Ye service kuch record ya bhejti nahi.</string>
+</resources>

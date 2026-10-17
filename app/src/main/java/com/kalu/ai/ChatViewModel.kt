@@ -1,0 +1,305 @@
+package com.kalu.ai
+
+import android.app.Application
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.Locale
+
+class ChatViewModel(app: Application) : AndroidViewModel(app) {
+
+    class Pending(val message: String, val action: () -> Unit)
+
+    private val ctx: Context = app.applicationContext
+    private val chatStore = ChatStore(ctx)
+    private val notesStore = NotesStore(ctx)
+    val prefs = Prefs(ctx)
+
+    val messages = mutableStateListOf<ChatMessage>()
+    val notes = mutableStateListOf<Note>()
+
+    var typing by mutableStateOf(false)
+        private set
+    var mode by mutableStateOf(Mode.CHAT)
+    var voiceState by mutableStateOf(VoiceState.IDLE)
+        private set
+    var continuous by mutableStateOf(false)
+        private set
+    var pending by mutableStateOf<Pending?>(null)
+        private set
+    var notice by mutableStateOf<String?>(null)
+
+    private var nextId = 1L
+
+    private val voice = VoiceController(
+        ctx,
+        onText = { onVoiceText(it) },
+        onState = { voiceState = it },
+        onNotice = { notice = it },
+        onContinuousChanged = { continuous = it }
+    )
+
+    init {
+        if (prefs.saveHistory) messages.addAll(chatStore.load())
+        notes.addAll(notesStore.load())
+        nextId = (messages.maxOfOrNull { it.id } ?: 0L) + 1
+        if (messages.isEmpty()) addMsg(OfflineBrain.greeting(), false)
+    }
+
+    // ---------- messages ----------
+
+    private fun addMsg(text: String, fromUser: Boolean) {
+        messages.add(ChatMessage(nextId++, fromUser, text, System.currentTimeMillis()))
+        persist()
+    }
+
+    private fun persist() {
+        if (!prefs.saveHistory) return
+        val snapshot = messages.toList()
+        viewModelScope.launch(Dispatchers.IO) { chatStore.save(snapshot) }
+    }
+
+    private fun botSay(text: String, speak: Boolean = true) {
+        addMsg(text, false)
+        if (speak && (prefs.speakReplies || voice.continuous)) voice.speak(text) else voice.resume()
+    }
+
+    private fun langCode() = if (prefs.language == "english") "en-IN" else "hi-IN"
+
+    // ---------- voice ----------
+
+    fun micTapped() {
+        if (voiceState == VoiceState.LISTENING) voice.stop()
+        else if (!typing) voice.listenOnce(langCode())
+    }
+
+    fun toggleContinuous() {
+        if (continuous) voice.stop() else voice.startContinuous(langCode())
+    }
+
+    fun stopVoice() = voice.stop()
+
+    fun onAppBackground() = voice.stop()
+
+    private fun onVoiceText(raw: String) {
+        var text = raw.trim()
+        if (prefs.wakeEnabled && voice.continuous) {
+            val w = prefs.wakePhrase.lowercase(Locale.getDefault()).trim()
+            val idx = text.lowercase(Locale.getDefault()).indexOf(w)
+            if (w.isNotEmpty()) {
+                if (idx < 0) {
+                    voice.resume(); return
+                }
+                text = text.substring(minOf(idx + w.length, text.length)).trim(' ', ',', '.')
+                if (text.isEmpty()) {
+                    voice.resume(); return
+                }
+            }
+        }
+        send(text)
+    }
+
+    // ---------- sending ----------
+
+    fun send(raw: String) {
+        val text = raw.trim()
+        if (text.isEmpty()) return
+        if (typing) {
+            voice.resume(); return
+        }
+        addMsg(text, true)
+        val cmd = CommandRouter.parse(text)
+        if (cmd != null && handleCommand(cmd)) return
+        askBrain(text)
+    }
+
+    /** Returns false if the command should fall through to Gemini. */
+    private fun handleCommand(cmd: Command): Boolean {
+        when (cmd) {
+            is Command.OpenApp -> {
+                val hit = AppLauncher.find(ctx, cmd.name).firstOrNull() ?: return false
+                if (AppLauncher.launch(ctx, hit)) botSay("${hit.label} khol raha hoon. 🚀")
+                else botSay("${hit.label} ko main khol nahi paya. Is app ka launch intent supported nahi hai.")
+            }
+            is Command.FindApps -> {
+                val r = AppLauncher.find(ctx, cmd.query).take(6)
+                botSay(if (r.isEmpty()) "Koi app nahi mila: ${cmd.query}" else "Mile hue apps:\n" + r.joinToString("\n") { "• ${it.label}" })
+            }
+            is Command.YouTube -> {
+                if (YouTubeHelper.search(ctx, cmd.query))
+                    botSay("YouTube par \"${cmd.query}\" search khol diya. Result par tap karke play karo (ads/premium ko main bypass nahi karta). 🎵")
+                else botSay("YouTube nahi khul paya.")
+            }
+            is Command.SetAlarm -> {
+                val hhmm = String.format(Locale.US, "%02d:%02d", cmd.hour, cmd.minute)
+                if (AlarmHelper.setAlarm(ctx, cmd.hour, cmd.minute, "KALU reminder"))
+                    botSay("Clock app khol diya, $hhmm ka alarm wahan confirm kar lo. ⏰")
+                else botSay("Is phone par alarm app nahi khul paya.")
+            }
+            is Command.SetTimer -> {
+                if (AlarmHelper.setTimer(ctx, cmd.seconds, "KALU timer"))
+                    botSay("Clock app mein ${cmd.seconds} second ka timer taiyaar hai, wahan confirm karo. ⏳")
+                else botSay("Timer nahi lag paya.")
+            }
+            is Command.SaveNote -> {
+                addNote(cmd.text)
+                botSay("Note save kar diya: \"${cmd.text.take(80)}\" 📝")
+            }
+            is Command.ShowNotes -> {
+                botSay(
+                    if (notes.isEmpty()) "Abhi koi note nahi hai. 'note: kuch bhi' bolke add karo."
+                    else "Tumhare notes:\n" + notes.take(10).joinToString("\n") { "• ${it.text.take(100)}" },
+                    speak = false
+                )
+            }
+            else -> screenCommand(cmd)
+        }
+        return true
+    }
+
+    private fun askBrain(text: String) {
+        OfflineBrain.timeOrDate(text)?.let { botSay(it); return }
+        val key = prefs.secure.getApiKey()
+        if (key.isNullOrBlank()) {
+            botSay(
+                (OfflineBrain.tryReply(text) ?: OfflineBrain.fallback()) +
+                    "\n\n🔑 Gemini API key set nahi hai. Settings mein apni key daalo, phir har sawaal ka jawab de paunga.",
+                speak = false
+            )
+            return
+        }
+        typing = true
+        val turns = buildTurns()
+        val model = prefs.model
+        val system = Persona.system(prefs, mode)
+        viewModelScope.launch {
+            val res = GeminiClient.generate(key, model, system, turns)
+            typing = false
+            when (res) {
+                is GeminiResult.Ok -> botSay(res.text)
+                is GeminiResult.Err -> {
+                    val offline = if (res.kind == ErrKind.NETWORK) OfflineBrain.tryReply(text) else null
+                    botSay("⚠️ ${res.message}" + (offline?.let { "\n\n(Offline jawab) $it" } ?: ""), speak = false)
+                }
+            }
+        }
+    }
+
+    private fun buildTurns(): List<Pair<String, String>> {
+        val n = prefs.memoryTurns
+        val src = messages.filter { !it.text.startsWith("⚠️") }
+        val recent = if (n == 0) src.takeLast(1) else src.takeLast(n * 2 + 1)
+        val out = mutableListOf<Pair<String, String>>()
+        for (m in recent) {
+            val role = if (m.fromUser) "user" else "model"
+            if (out.isNotEmpty() && out.last().first == role) {
+                out[out.size - 1] = role to (out.last().second + "\n" + m.text)
+            } else out.add(role to m.text)
+        }
+        while (out.isNotEmpty() && out.first().first != "user") out.removeAt(0)
+        return out
+    }
+
+    // ---------- screen control (AccessibilityService) ----------
+
+    private val sensitive = listOf(
+        "send", "bhej", "delete", "hatao", "remove", "pay", "buy", "purchase", "order", "checkout",
+        "confirm", "transfer", "submit", "post", "install", "uninstall", "sign out", "logout", "call", "reset", "format"
+    )
+
+    private fun screenCommand(cmd: Command) {
+        if (KaluAccess.service == null) {
+            botSay("Screen control ke liye Accessibility service ON honi chahiye. Settings, phir Permissions guide dekho.")
+            return
+        }
+        if (!KaluAccess.armed.value) {
+            botSay("Screen control abhi OFF hai. Upar wala 'Screen control' switch ON karo, phir command bolo.")
+            return
+        }
+        if (cmd is Command.ClickText && sensitive.any { cmd.text.lowercase(Locale.ROOT).contains(it) }) {
+            pending = Pending("'${cmd.text}' dabana sensitive ho sakta hai (send/pay/delete jaisa). Pakka karna hai?") { runDelayed(cmd) }
+            return
+        }
+        runDelayed(cmd)
+    }
+
+    private fun runDelayed(cmd: Command) {
+        botSay("Theek hai! 4 second mein karunga. Jis app par kaam karna hai uspar chale jao. Rokne ke liye Stop dabao.", speak = false)
+        viewModelScope.launch {
+            delay(4000)
+            val svc = KaluAccess.service
+            if (!KaluAccess.armed.value || svc == null) {
+                addMsg("Screen action roka gaya. 🛑", false)
+                return@launch
+            }
+            botSay(svc.execute(cmd))
+        }
+    }
+
+    fun setArmed(on: Boolean) {
+        if (on) KaluAccess.arm(ctx) else KaluAccess.disarm(ctx)
+    }
+
+    fun stopControl() {
+        KaluAccess.disarm(ctx)
+        notice = "Screen control band kar diya."
+    }
+
+    fun confirmPending() {
+        val p = pending
+        pending = null
+        p?.action?.invoke()
+    }
+
+    fun dismissPending() {
+        pending = null
+        addMsg("Theek hai, ye action cancel kar diya.", false)
+    }
+
+    // ---------- notes / privacy ----------
+
+    private fun addNote(text: String) {
+        notes.add(0, Note(System.currentTimeMillis(), text, System.currentTimeMillis()))
+        notesStore.save(notes.toList())
+    }
+
+    fun addNoteFromUi(text: String) {
+        if (text.isNotBlank()) addNote(text.trim())
+    }
+
+    fun deleteNote(id: Long) {
+        notes.removeAll { it.id == id }
+        notesStore.save(notes.toList())
+    }
+
+    fun clearNotes() {
+        notes.clear()
+        notesStore.clear()
+    }
+
+    fun clearHistory() {
+        messages.clear()
+        viewModelScope.launch(Dispatchers.IO) { chatStore.clear() }
+        addMsg(OfflineBrain.greeting(), false)
+    }
+
+    fun clearAllData() {
+        clearHistory()
+        clearNotes()
+        prefs.secure.putApiKey("")
+        prefs.resetAll()
+        notice = "Saara data delete ho gaya."
+    }
+
+    override fun onCleared() {
+        voice.destroy()
+        super.onCleared()
+    }
+}
