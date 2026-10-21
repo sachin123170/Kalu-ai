@@ -108,3 +108,12 @@ Chat screen > chip "🫧 Bubble". Allow "Display over other apps" and Mic, then 
 - `Rahul ko whatsapp karo: kal milte hain` : confirms, opens the WhatsApp chat with the text filled in, and if Screen control is ON presses Send after 4 seconds. Otherwise you press Send. A 10-digit number without country code is assumed to be Indian (+91).
 - Any app (WhatsApp, Instagram...): open the chat, then `type: kal milte hain` (types into the text box) and `send karo` (presses Send; always confirmed). From the bubble, confirmation is by voice: tap the bubble and say "haan" or "nahi".
 - Nothing is ever sent without your confirmation. Apps change their screens, so Send may not be found; KALU then says so.
+
+## Hindi voice (v1.4)
+Speech recognition often returns Devanagari. `Translit.kt` maps common command words (को, भेजो, एसएमएस, व्हाट्सएप, खोलो...) to Latin so voice commands match, and transliterates names so contacts saved in English are still found. The message body stays in the script you spoke.
+
+## Feelings-like behaviour (v1.5)
+- Settings > "Dost ka mood": Balanced, Caring, Funny, Serious, Motivational. Changes how KALU talks.
+- KALU guesses how your message feels (happy, sad, tired, stressed, angry) from keywords, in the chat and in the bubble. The guess is used only for that reply: it is NOT saved, and it is sent to Gemini only as a one-line hint.
+- The orb changes colour with the guess and the spoken reply gets a slower/softer or brighter tone. A small emoji appears next to "Tumhara AI dost".
+- KALU says honestly that it is an AI without human feelings if asked, and responds with care and points to trusted people or helplines if you seem in serious distress.

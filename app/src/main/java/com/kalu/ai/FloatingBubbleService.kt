@@ -71,6 +71,7 @@ class FloatingBubbleService : Service() {
     private var label: TextView? = null
     private var voiceState = VoiceState.IDLE
     private var awaiting: (() -> Unit)? = null
+    private var feel = Feel.NEUTRAL
     private var awaitingAt = 0L
 
     private val sensitive = listOf(
@@ -260,6 +261,8 @@ class FloatingBubbleService : Service() {
         val text = raw.trim()
         if (text.isEmpty()) return
         showLabel("🗣 $text")
+        feel = FeelDetector.detect(text)
+        voice.setTone(feel.rate, feel.pitch)
         val pendingAction = awaiting
         if (pendingAction != null) {
             awaiting = null
@@ -371,7 +374,7 @@ class FloatingBubbleService : Service() {
             return
         }
         showLabel("Soch raha hoon...")
-        val system = Persona.system(prefs, Mode.CHAT) +
+        val system = Persona.system(prefs, Mode.CHAT, feel) +
             "\nYou are answering through a voice bubble: reply in 1 to 3 short spoken sentences, no markdown, no lists, no code blocks."
         scope.launch {
             when (val res = GeminiClient.generate(key, prefs.model, system, listOf("user" to text))) {

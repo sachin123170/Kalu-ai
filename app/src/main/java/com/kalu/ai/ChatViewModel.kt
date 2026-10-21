@@ -35,6 +35,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     var pending by mutableStateOf<Pending?>(null)
         private set
     var notice by mutableStateOf<String?>(null)
+    var feel by mutableStateOf(Feel.NEUTRAL)
+        private set
 
     private var nextId = 1L
 
@@ -115,6 +117,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             voice.resume(); return
         }
         addMsg(text, true)
+        feel = FeelDetector.detect(text)
+        voice.setTone(feel.rate, feel.pitch)
         val cmd = CommandRouter.parse(text)
         if (cmd != null && handleCommand(cmd)) return
         askBrain(text)
@@ -200,7 +204,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         typing = true
         val turns = buildTurns()
         val model = prefs.model
-        val system = Persona.system(prefs, mode)
+        val system = Persona.system(prefs, mode, feel)
         viewModelScope.launch {
             val res = GeminiClient.generate(key, model, system, turns)
             typing = false

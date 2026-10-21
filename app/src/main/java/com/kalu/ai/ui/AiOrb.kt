@@ -15,12 +15,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Animated blue orb. Pulses faster while KALU is "thinking". */
+/** Animated orb. Pulses faster while KALU is busy; the colour follows the mood (tint). */
 @Composable
-fun AiOrb(modifier: Modifier = Modifier, size: Dp = 44.dp, thinking: Boolean = false) {
+fun AiOrb(
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+    thinking: Boolean = false,
+    tint: Color = Color(0xFF4DA3FF)
+) {
     val transition = rememberInfiniteTransition(label = "orb")
     val pulse by transition.animateFloat(
         initialValue = 0.90f,
@@ -44,29 +50,28 @@ fun AiOrb(modifier: Modifier = Modifier, size: Dp = 44.dp, thinking: Boolean = f
     Canvas(modifier = modifier.size(size)) {
         val c = Offset(this.size.width / 2f, this.size.height / 2f)
         val r = this.size.minDimension / 2f
+        val light = lerp(tint, Color.White, 0.85f)
+        val dark = lerp(tint, Color.Black, 0.55f)
 
-        // Soft outer glow
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(Color(0x884DA3FF), Color.Transparent),
+                colors = listOf(tint.copy(alpha = 0.55f), Color.Transparent),
                 center = c,
                 radius = r
             ),
             radius = r,
             center = c
         )
-        // Expanding ring
         drawCircle(
-            color = Color(0xFF4DA3FF).copy(alpha = (1f - ring) * 0.8f),
+            color = tint.copy(alpha = (1f - ring) * 0.8f),
             radius = r * ring,
             center = c,
             style = Stroke(width = r * 0.06f)
         )
-        // Core
         val coreR = r * 0.55f * pulse
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFE6F4FF), Color(0xFF4DA3FF), Color(0xFF1B4F8A)),
+                colors = listOf(light, tint, dark),
                 center = c,
                 radius = coreR
             ),

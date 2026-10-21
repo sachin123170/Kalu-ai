@@ -64,11 +64,26 @@ object Messaging {
         }
     }
 
+    /** Tries the name as spoken, then its Latin transliteration, then shorter forms ("vinaya" becomes "vinay"). */
+    private fun lookup(ctx: Context, name: String): List<ContactHit> {
+        val first = findContacts(ctx, name)
+        if (first.isNotEmpty()) return first
+        var q = Translit.nameToLatin(name)
+        var hits = if (q != name) findContacts(ctx, q) else emptyList()
+        var tries = 0
+        while (hits.isEmpty() && q.length > 3 && tries < 2) {
+            q = q.dropLast(1)
+            hits = findContacts(ctx, q)
+            tries++
+        }
+        return hits
+    }
+
     private fun pick(ctx: Context, name: String): Pair<ContactHit?, String?> {
         if (!has(ctx, Manifest.permission.READ_CONTACTS)) {
             return null to "Contacts permission chahiye. KALU ke Permissions guide mein allow karo."
         }
-        val hits = findContacts(ctx, name)
+        val hits = lookup(ctx, name)
         if (hits.isEmpty()) return null to "'$name' naam ka contact nahi mila."
         val best = hits.first()
         val names = hits.map { it.name.lowercase(Locale.ROOT) }.distinct()

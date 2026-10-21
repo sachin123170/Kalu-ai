@@ -97,6 +97,12 @@ class VoiceController(
         tts = null
     }
 
+    /** Speech speed and pitch for the next replies (mood-based). */
+    fun setTone(rate: Float, pitch: Float) {
+        tts?.setSpeechRate(rate)
+        tts?.setPitch(pitch)
+    }
+
     fun speak(raw: String) {
         val clean = sanitize(raw)
         val t = tts

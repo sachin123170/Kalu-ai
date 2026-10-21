@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
@@ -103,6 +104,7 @@ fun ChatScreen(
     val armed by KaluAccess.armed.collectAsState()
     val connected by KaluAccess.serviceConnected.collectAsState()
     val bubbleOn by FloatingBubbleService.running.collectAsState()
+    val orbTint by animateColorAsState(Color(vm.feel.colorArgb), label = "feel")
     val messages = vm.messages
 
     DisposableEffect(activity) {
@@ -169,7 +171,7 @@ fun ChatScreen(
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AiOrb(size = 44.dp, thinking = vm.typing || vm.voiceState != VoiceState.IDLE)
+            AiOrb(size = 44.dp, thinking = vm.typing || vm.voiceState != VoiceState.IDLE, tint = orbTint)
             Column(
                 Modifier
                     .weight(1f)
@@ -181,7 +183,7 @@ fun ChatScreen(
                         vm.typing -> "soch raha hoon..."
                         vm.voiceState == VoiceState.LISTENING -> "sun raha hoon..."
                         vm.voiceState == VoiceState.SPEAKING -> "bol raha hoon..."
-                        else -> "Tumhara AI dost"
+                        else -> "Tumhara AI dost " + vm.feel.emoji
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

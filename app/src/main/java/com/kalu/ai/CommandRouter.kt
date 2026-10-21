@@ -39,7 +39,7 @@ object CommandRouter {
     private fun words(s: String) = s.trim().split(Regex("\\s+")).size
 
     fun parse(input: String): Command? {
-        val s = input.trim().trimEnd('.', '!', '?', '।').trim()
+        val s = Translit.commandWords(input).trim().trimEnd('.', '!', '?', '।').trim()
         if (s.isEmpty()) return null
         val t = s.lowercase(Locale.ROOT)
 

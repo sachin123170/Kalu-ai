@@ -75,6 +75,11 @@ class Prefs(context: Context) {
         get() = sp.getString("language", "hinglish") ?: "hinglish"
         set(v) = sp.edit().putString("language", v).apply()
 
+    /** balanced | caring | funny | serious | motivational */
+    var mood: String
+        get() = sp.getString("mood", "balanced") ?: "balanced"
+        set(v) = sp.edit().putString("mood", v).apply()
+
     var speakReplies: Boolean
         get() = sp.getBoolean("speak", false)
         set(v) = sp.edit().putBoolean("speak", v).apply()

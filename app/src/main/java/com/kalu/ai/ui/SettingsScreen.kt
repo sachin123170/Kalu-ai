@@ -62,6 +62,7 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
     var style by remember { mutableStateOf(p.style) }
     var language by remember { mutableStateOf(p.language) }
     var creator by remember { mutableStateOf(p.creatorName) }
+    var mood by remember { mutableStateOf(p.mood) }
     var speak by remember { mutableStateOf(p.speakReplies) }
     var wakeOn by remember { mutableStateOf(p.wakeEnabled) }
     var wakePhrase by remember { mutableStateOf(p.wakePhrase) }
@@ -189,6 +190,11 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
         )
         ChipRow(listOf("friendly" to "Friendly", "short" to "Short", "detailed" to "Detailed"), style) { style = it; p.style = it }
         ChipRow(listOf("hinglish" to "Hinglish", "hindi" to "Hindi", "english" to "English"), language) { language = it; p.language = it }
+        Text("Dost ka mood", style = MaterialTheme.typography.bodyMedium)
+        ChipRow(
+            listOf("balanced" to "Balanced", "caring" to "Caring", "funny" to "Funny", "serious" to "Serious", "motivational" to "Motivational"),
+            mood
+        ) { mood = it; p.mood = it }
 
         SectionTitle("Voice")
         SwitchRow("Jawab bolke sunao (TTS)", speak) { speak = it; p.speakReplies = it }
