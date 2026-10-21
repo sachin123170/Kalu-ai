@@ -117,3 +117,6 @@ Speech recognition often returns Devanagari. `Translit.kt` maps common command w
 - KALU guesses how your message feels (happy, sad, tired, stressed, angry) from keywords, in the chat and in the bubble. The guess is used only for that reply: it is NOT saved, and it is sent to Gemini only as a one-line hint.
 - The orb changes colour with the guess and the spoken reply gets a slower/softer or brighter tone. A small emoji appears next to "Tumhara AI dost".
 - KALU says honestly that it is an AI without human feelings if asked, and responds with care and points to trusted people or helplines if you seem in serious distress.
+
+## Natural message sentences (v1.6)
+Besides `Naam ko sms bhejo: ...`, KALU now understands looser sentences, e.g. `watsapp pe sms karo paras ko ki mai nahi arha`, `paras ko message bhejo ki main late hoon`. It needs a channel word (sms / whatsapp / message), a send verb (bhejo, karo, likho...), `Naam ko`, and the message text. The contact must exist in your phone contacts.

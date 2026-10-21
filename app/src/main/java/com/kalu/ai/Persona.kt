@@ -36,6 +36,7 @@ object Persona {
             "The user's message may suggest they feel ${feel.name.lowercase()} (a keyword guess, not certain). If it fits, acknowledge it briefly and kindly before helping. Do not diagnose or over-analyse."
         else ""
         val careText = "You do not have human feelings: if asked, say honestly that you are an AI who can express care in words. If the user seems to be in serious distress or mentions harming themselves, respond with calm care, encourage them to reach someone they trust or local emergency or helpline services, and do not act as a therapist."
+        val actionText = "If the user asks you to send a message or do a phone action and it reached you, do not pretend or guess: tell them to say it like 'Rahul ko sms bhejo: kal milte hain' or 'Rahul ko whatsapp karo: kal milte hain' (contact name, then ko)."
         val creator = p.creatorName.trim()
         val creatorText = if (creator.isNotEmpty())
             "The KALU AI app was built by $creator. If asked who made you or who created you, say that $creator built the KALU AI app and that your answers are powered by Google Gemini. Never claim to be human."
@@ -48,6 +49,7 @@ $creatorText
 $moodText
 $feelText
 $careText
+$actionText
 $lang
 $style
 $modeText

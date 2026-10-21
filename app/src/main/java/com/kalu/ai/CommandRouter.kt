@@ -38,6 +38,46 @@ object CommandRouter {
 
     private fun words(s: String) = s.trim().split(Regex("\\s+")).size
 
+    private val channelWa = setOf("whatsapp", "watsapp", "whatsap", "wa")
+    private val sendVerbs = setOf("bhejo", "bhej", "karo", "kar", "likho", "bolo", "bol", "send", "bhijwao")
+    private val fillers = setOf("pe", "par", "me", "mein", "se", "ke", "liye", "ki", "ye", "is", "ek", "do", "aur")
+    private val stopWords: Set<String> = channelWa + setOf("sms", "message", "msg") + sendVerbs + fillers
+
+    /**
+     * Natural sentences like "watsapp pe sms karo paras ko ki mai nahi arha" or
+     * "paras ko message bhejo ki main late hoon". Needs: a channel word, a send verb, "NAME ko", and a body.
+     */
+    private fun flexibleMessage(s: String): Command? {
+        val tokens = s.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val lower = tokens.map { it.lowercase(Locale.ROOT).trim(':', '-', ',') }
+        val koIdx = lower.indexOf("ko")
+        if (koIdx <= 0) return null
+        val hasWa = lower.any { it in channelWa }
+        val hasSms = lower.any { it == "sms" }
+        val hasMsg = lower.any { it == "message" || it == "msg" }
+        if (!hasWa && !hasSms && !hasMsg) return null
+        if (lower.none { it in sendVerbs }) return null
+
+        val nameTokens = ArrayList<String>()
+        var i = koIdx - 1
+        while (i >= 0 && nameTokens.size < 2 && lower[i] !in stopWords) {
+            nameTokens.add(0, tokens[i])
+            i--
+        }
+        if (nameTokens.isEmpty()) return null
+
+        var j = koIdx + 1
+        while (j < tokens.size && lower[j] in stopWords) {
+            val hadColon = tokens[j].endsWith(":")
+            j++
+            if (hadColon) break
+        }
+        val body = tokens.drop(j).joinToString(" ").trimStart(':', '-', ' ').trim()
+        if (body.isEmpty()) return null
+        val name = nameTokens.joinToString(" ")
+        return if (hasWa || !hasSms) Command.SendWhatsApp(name, body) else Command.SendSms(name, body)
+    }
+
     fun parse(input: String): Command? {
         val s = Translit.commandWords(input).trim().trimEnd('.', '!', '?', '।').trim()
         if (s.isEmpty()) return null
@@ -73,6 +113,8 @@ object CommandRouter {
             .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), it.groupValues[2].trim()) }
         Regex("^(.+?)\\s+ko\\s+(?:message|msg|text)\\s+(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
             .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+
+        flexibleMessage(s)?.let { return it }
 
         // Type into the focused text box (screen control)
         Regex("^(?:type|likho|write|isme likho|yaha likho)\\s*[:\\-]\\s*(.+)$", I).find(s)?.let {
