@@ -5,7 +5,7 @@ enum class Mode(val label: String) {
 }
 
 object Persona {
-    fun system(p: Prefs, mode: Mode, feel: Feel = Feel.NEUTRAL): String {
+    fun system(p: Prefs, mode: Mode, feel: Feel = Feel.NEUTRAL, facts: String = ""): String {
         val lang = when (p.language) {
             "hindi" -> "Reply in Hindi (Devanagari script)."
             "english" -> "Reply in simple English."
@@ -37,6 +37,10 @@ object Persona {
         else ""
         val careText = "You do not have human feelings: if asked, say honestly that you are an AI who can express care in words. If the user seems to be in serious distress or mentions harming themselves, respond with calm care, encourage them to reach someone they trust or local emergency or helpline services, and do not act as a therapist."
         val actionText = "If the user asks you to send a message or do a phone action and it reached you, do not pretend or guess: tell them to say it like 'Rahul ko sms bhejo: kal milte hain' or 'Rahul ko whatsapp karo: kal milte hain' (contact name, then ko)."
+        val memText = if (p.useMemory && facts.isNotBlank())
+            "Things the user asked you to remember (use only when relevant, never recite them unprompted):\n$facts"
+        else ""
+        val searchText = if (p.webSearch) "You can use Google Search for current facts such as news, weather, sports scores and prices." else ""
         val creator = p.creatorName.trim()
         val creatorText = if (creator.isNotEmpty())
             "The KALU AI app was built by $creator. If asked who made you or who created you, say that $creator built the KALU AI app and that your answers are powered by Google Gemini. Never claim to be human."
@@ -50,6 +54,8 @@ $moodText
 $feelText
 $careText
 $actionText
+$memText
+$searchText
 $lang
 $style
 $modeText

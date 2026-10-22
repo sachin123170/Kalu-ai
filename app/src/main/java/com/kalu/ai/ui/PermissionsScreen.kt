@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -64,6 +65,7 @@ fun PermissionsScreen(onBack: () -> Unit) {
         !notifNeeded || ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
     val overlayOk = remember(tick) { Settings.canDrawOverlays(ctx) }
+    val notifListenerOk = remember(tick) { NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName) }
     val a11yEnabled = remember(tick, connected) { KaluAccess.isEnabledInSettings(ctx) }
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
@@ -122,6 +124,20 @@ fun PermissionsScreen(onBack: () -> Unit) {
             if (overlayOk) "✅ Permission mili hui hai" else "❌ Abhi nahi mili",
             if (overlayOk) null else "Permission do"
         ) { ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+
+        PermCard(
+            "📨 Notification access (messages padhna aur reply)",
+            "Optional. 'naye messages padho' aur 'Rahul ko reply karo: ...' ke liye. Sirf WhatsApp, Telegram, SMS aur Instagram ke notifications dekhe jate hain; OTP/password wale skip hote hain; kuch save nahi hota. KALU Settings mein 'Messages padhne do' bhi ON karna padta hai. Permission grey ho to Settings, Apps, KALU AI, upar right ⋮, 'Allow restricted settings'.",
+            if (notifListenerOk) "✅ Android mein ON hai" else "⚪ OFF",
+            "Notification access kholo"
+        ) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+
+        PermCard(
+            "🗣 Default assistant (power button / home gesture)",
+            "Optional. Phone ki Settings mein KALU AI ko 'Digital assistant app' chuno. Phir power button lamba dabane par KALU khulega aur sunna shuru karega. Kuch phones ye option chhupa dete hain, to wahan KALU list mein nahi dikhega. Home screen par widget (🎤 KALU) aur Quick Settings tile bhi jod sakte ho.",
+            "ℹ️ Optional",
+            "Assistant settings kholo"
+        ) { ctx.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 
         PermCard(
             "⏰ Alarm / Timer",

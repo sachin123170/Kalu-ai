@@ -142,6 +142,15 @@ class KaluAccessibilityService : AccessibilityService() {
         return dispatchGesture(g, null, null)
     }
 
+    /** Visible text of the screen (password fields skipped). Null if KALU itself is on screen. */
+    fun screenText(): String? {
+        val root = rootInActiveWindow ?: return null
+        if (root.packageName?.toString() == packageName) return null
+        val out = mutableListOf<String>()
+        collect(root, out)
+        return out.joinToString("\n")
+    }
+
     private fun readScreen(): String {
         val root = rootInActiveWindow ?: return "Screen padh nahi paya."
         val out = mutableListOf<String>()

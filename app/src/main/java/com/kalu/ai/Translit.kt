@@ -22,6 +22,10 @@ object Translit {
         "इंस्टाग्राम" to "instagram", "फेसबुक" to "facebook", "टेलीग्राम" to "telegram",
         "क्रोम" to "chrome", "कैमरा" to "camera", "जीमेल" to "gmail", "मैप्स" to "maps",
         "सेटिंग्स" to "settings", "कैलकुलेटर" to "calculator", "गैलरी" to "gallery",
+        "कॉल" to "call", "फोन" to "phone", "लगाओ" to "lagao", "याद" to "yaad", "रखो" to "rakho",
+        "कैलेंडर" to "calendar", "भूल" to "bhool", "जाओ" to "jao", "रास्ता" to "rasta", "का" to "ka",
+        "ब्रीफिंग" to "briefing", "रोको" to "roko", "गाना" to "gaana",
+        "रिप्लाई" to "reply", "मैसेजेस" to "messages", "पढ़ो" to "padho", "नए" to "naye",
         "सेंड" to "send", "बैक" to "back", "होम" to "home", "स्क्रॉल" to "scroll"
     )
 

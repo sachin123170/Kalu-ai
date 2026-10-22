@@ -1,5 +1,6 @@
 package com.kalu.ai
 
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -30,24 +31,48 @@ object GeminiClient {
         apiKey: String,
         model: String,
         system: String,
-        turns: List<Pair<String, String>>
+        turns: List<Pair<String, String>>,
+        image: ByteArray? = null,
+        search: Boolean = false
     ): GeminiResult = withContext(Dispatchers.IO) {
         try {
-            val contents = JSONArray()
-            for ((role, text) in turns) {
-                contents.put(
-                    JSONObject().put("role", role)
-                        .put("parts", JSONArray().put(JSONObject().put("text", text)))
-                )
-            }
-            val body = JSONObject()
-                .put(
-                    "systemInstruction",
-                    JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system)))
-                )
-                .put("contents", contents)
             val name = model.trim().removePrefix("models/")
-            val (code, text) = http("POST", "$BASE/models/$name:generateContent", apiKey, body.toString())
+            val url = "$BASE/models/$name:generateContent"
+
+            fun body(withSearch: Boolean): String {
+                val contents = JSONArray()
+                turns.forEachIndexed { idx, turn ->
+                    val role = turn.first
+                    val parts = JSONArray().put(JSONObject().put("text", turn.second))
+                    if (image != null && role == "user" && idx == turns.lastIndex) {
+                        parts.put(
+                            JSONObject().put(
+                                "inline_data",
+                                JSONObject()
+                                    .put("mime_type", "image/jpeg")
+                                    .put("data", Base64.encodeToString(image, Base64.NO_WRAP))
+                            )
+                        )
+                    }
+                    contents.put(JSONObject().put("role", role).put("parts", parts))
+                }
+                val b = JSONObject()
+                    .put(
+                        "systemInstruction",
+                        JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system)))
+                    )
+                    .put("contents", contents)
+                if (withSearch) {
+                    b.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+                }
+                return b.toString()
+            }
+
+            var result = http("POST", url, apiKey, body(search))
+            // Some models do not support the search tool: retry once without it.
+            if (search && result.first == 400) result = http("POST", url, apiKey, body(false))
+            val code = result.first
+            val text = result.second
             if (code in 200..299) parse(text) else httpError(code, text, name)
         } catch (e: IOException) {
             GeminiResult.Err(ErrKind.NETWORK, "Internet ya network mein problem hai. Connection check karke dobara try karo.")

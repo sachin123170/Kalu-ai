@@ -37,6 +37,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     var notice by mutableStateOf<String?>(null)
     var feel by mutableStateOf(Feel.NEUTRAL)
         private set
+    var attachedImage by mutableStateOf<ByteArray?>(null)
 
     private var nextId = 1L
 
@@ -111,14 +112,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- sending ----------
 
     fun send(raw: String) {
-        val text = raw.trim()
+        val img = attachedImage
+        val text = raw.trim().ifEmpty { if (img != null) "Is photo mein kya hai? Hinglish mein batao." else "" }
         if (text.isEmpty()) return
         if (typing) {
             voice.resume(); return
         }
-        addMsg(text, true)
+        addMsg(if (img != null) "📷 $text" else text, true)
         feel = FeelDetector.detect(text)
         voice.setTone(feel.rate, feel.pitch)
+        if (img != null) {
+            attachedImage = null
+            askBrain(text, image = img)
+            return
+        }
         val cmd = CommandRouter.parse(text)
         if (cmd != null && handleCommand(cmd)) return
         askBrain(text)
@@ -163,6 +170,17 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     speak = false
                 )
             }
+            is Command.Remember -> botSay(MoreActions.remember(ctx, cmd.text))
+            is Command.ShowMemory -> botSay(MoreActions.showMemory(ctx), speak = false)
+            is Command.Forget -> botSay(MoreActions.forget(ctx, cmd.text))
+            is Command.AddEvent -> botSay(MoreActions.addEvent(ctx, cmd.title, cmd.startMillis))
+            is Command.CallContact -> botSay(MoreActions.call(ctx, cmd.name))
+            is Command.Navigate -> botSay(MoreActions.navigate(ctx, cmd.place))
+            is Command.Media -> botSay(MoreActions.media(ctx, cmd.action), speak = false)
+            is Command.Briefing -> botSay(MoreActions.briefing(ctx))
+            is Command.ReadMessages -> botSay(NotifHelper.readLatest(ctx))
+            is Command.ReplyTo -> planMessage(NotifHelper.reply(ctx, cmd.name, cmd.body))
+            is Command.SummarizeScreen -> summarizeScreen()
             is Command.SendSms -> planMessage(Messaging.sms(ctx, cmd.name, cmd.body))
             is Command.SendWhatsApp -> planMessage(Messaging.whatsapp(ctx, cmd.name, cmd.body))
             else -> screenCommand(cmd)
@@ -190,8 +208,30 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun askBrain(text: String) {
-        OfflineBrain.timeOrDate(text)?.let { botSay(it); return }
+    private fun summarizeScreen() {
+        if (KaluAccess.service == null || !KaluAccess.armed.value) {
+            botSay("Screen summary ke liye Accessibility service ON aur Screen control ON chahiye.")
+            return
+        }
+        pending = Pending("Screen ka text Gemini (Google) ko bhejun summary ke liye? Password wale boxes nahi padhe jate.") {
+            botSay("Theek hai! 4 second mein padhunga. Jis app ka summary chahiye uspar chale jao.", speak = false)
+            viewModelScope.launch {
+                delay(4000)
+                val text = KaluAccess.service?.screenText()
+                if (text.isNullOrBlank()) {
+                    botSay("Screen se text nahi mila (ya KALU hi screen par tha).")
+                } else {
+                    addMsg("📄 Screen ka summary", true)
+                    askBrain("Neeche ek screen ka text hai. Uska chhota summary Hinglish mein do.", extraContext = text)
+                }
+            }
+        }
+    }
+
+    private fun askBrain(text: String, extraContext: String? = null, image: ByteArray? = null) {
+        if (image == null && extraContext == null) {
+            OfflineBrain.timeOrDate(text)?.let { botSay(it); return }
+        }
         val key = prefs.secure.getApiKey()
         if (key.isNullOrBlank()) {
             botSay(
@@ -202,11 +242,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         typing = true
-        val turns = buildTurns()
+        val turns = buildTurns().toMutableList()
+        if (extraContext != null && turns.isNotEmpty() && turns.last().first == "user") {
+            turns[turns.size - 1] = "user" to (turns.last().second + "\n\n" + extraContext)
+        }
         val model = prefs.model
-        val system = Persona.system(prefs, mode, feel)
+        val system = Persona.system(prefs, mode, feel, MoreActions.factsForPrompt(ctx))
         viewModelScope.launch {
-            val res = GeminiClient.generate(key, model, system, turns)
+            val res = GeminiClient.generate(key, model, system, turns, image, prefs.webSearch && image == null)
             typing = false
             when (res) {
                 is GeminiResult.Ok -> botSay(res.text)
@@ -320,6 +363,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         notesStore.clear()
     }
 
+    fun clearFacts() {
+        MoreActions.clearFacts(ctx)
+        notice = "Yaadein clear ho gayi."
+    }
+
     fun clearHistory() {
         messages.clear()
         viewModelScope.launch(Dispatchers.IO) { chatStore.clear() }
@@ -329,6 +377,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun clearAllData() {
         clearHistory()
         clearNotes()
+        MoreActions.clearFacts(ctx)
         prefs.secure.putApiKey("")
         prefs.resetAll()
         notice = "Saara data delete ho gaya."

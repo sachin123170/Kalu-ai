@@ -120,3 +120,24 @@ Speech recognition often returns Devanagari. `Translit.kt` maps common command w
 
 ## Natural message sentences (v1.6)
 Besides `Naam ko sms bhejo: ...`, KALU now understands looser sentences, e.g. `watsapp pe sms karo paras ko ki mai nahi arha`, `paras ko message bhejo ki main late hoon`. It needs a channel word (sms / whatsapp / message), a send verb (bhejo, karo, likho...), `Naam ko`, and the message text. The contact must exist in your phone contacts.
+
+## Assistant extras (v2.0)
+- **Yaad rakho:** `yaad rakho: mummy ka birthday 5 tareekh`, `meri yaadein`, `bhool jao: birthday`. Stored on the phone; sent to Gemini as context unless you turn it off in Settings.
+- **Live web search:** Gemini's Google Search tool for news, weather, scores (Settings switch; falls back automatically if the model does not support it).
+- **Calendar:** `kal 5 baje meeting calendar mein daalo` opens the Calendar app pre-filled; you press Save.
+- **Call:** `Rahul ko call karo` puts the number in the dialer; you press the call button.
+- **Maps:** `Lal Qila ka raasta batao`, `navigate to airport`.
+- **Music:** `pause karo`, `play karo`, `next gaana`, `pichla gaana` (media keys, works with most music apps).
+- **Briefing:** `briefing` gives date, time, your latest notes and memories.
+- **Photos:** use the 📎 button (camera or gallery), then ask a question. The photo is sent to Gemini/Google.
+- **Screen summary:** `is screen ka summary do` (needs Screen control ON; asks before sending the text to Gemini).
+- **Quick Settings tile:** pull down the notification shade, edit tiles, add "KALU". Tapping it opens KALU and starts listening.
+- **App lock:** Settings > Privacy. Uses the phone's own PIN, pattern or fingerprint and locks again after 60 seconds in the background. The floating bubble is a separate entry point and is not locked.
+- **Not built:** "Hey KALU" always-on wake word (needs a third-party SDK and a background microphone service), home-screen widget, becoming the phone's default assistant (needs a system voice-interaction service), and reading other apps' notifications (it would expose OTPs and bank messages).
+
+## v3.0 additions
+- **Home-screen widget:** long-press the home screen > Widgets > KALU AI. Tap it to open KALU and start listening.
+- **Default assistant (optional):** Android Settings > Apps > Default apps > Digital assistant app > KALU AI. The power-button long press or home gesture then opens KALU listening. Some phones hide this option.
+- **Messages and replies (optional, off by default):** turn on "Messages padhne do" in KALU Settings and allow Notification access in Android. Then `naye messages padho` reads the last few messages from WhatsApp, Telegram, SMS and Instagram notifications, and `Rahul ko reply karo: kal milte hain` replies to that notification after you confirm. OTP/password messages are skipped, nothing is saved, nothing goes to Gemini.
+- **Voice:** Settings > Voice > "Awaaz / TTS engine chuno" opens Android's text-to-speech settings so you can pick the Google engine and a Hindi voice.
+- **Not built:** an always-on "Hey KALU" wake word. It needs the Picovoice Porcupine SDK plus a free AccessKey from console.picovoice.ai and a background microphone service.

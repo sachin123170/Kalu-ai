@@ -2,6 +2,8 @@
 
 package com.kalu.ai.ui
 
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +53,7 @@ private val DEFAULT_MODELS = listOf("gemini-2.5-flash", "gemini-2.5-flash-lite",
 @Composable
 fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> Unit) {
     val p = vm.prefs
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var keyInput by remember { mutableStateOf("") }
     var hasKey by remember { mutableStateOf(!p.secure.getApiKey().isNullOrBlank()) }
@@ -63,6 +66,10 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
     var language by remember { mutableStateOf(p.language) }
     var creator by remember { mutableStateOf(p.creatorName) }
     var mood by remember { mutableStateOf(p.mood) }
+    var webSearch by remember { mutableStateOf(p.webSearch) }
+    var useMemory by remember { mutableStateOf(p.useMemory) }
+    var appLock by remember { mutableStateOf(p.appLock) }
+    var notifAccess by remember { mutableStateOf(p.notifAccess) }
     var speak by remember { mutableStateOf(p.speakReplies) }
     var wakeOn by remember { mutableStateOf(p.wakeEnabled) }
     var wakePhrase by remember { mutableStateOf(p.wakePhrase) }
@@ -196,9 +203,27 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
             mood
         ) { mood = it; p.mood = it }
 
+        SectionTitle("Smart features")
+        SwitchRow("Live web search (Google Search se taaza jaankari)", webSearch) { webSearch = it; p.webSearch = it }
+        SwitchRow("Meri yaadein Gemini ko bhejo (yaad rakho: ...)", useMemory) { useMemory = it; p.useMemory = it }
+        OutlinedButton(onClick = { vm.clearFacts(); status = "Yaadein clear." }) { Text("Yaadein clear karo") }
+        SwitchRow("Messages padhne do (WhatsApp, Telegram, SMS ke notifications)", notifAccess) { notifAccess = it; p.notifAccess = it }
+        Text(
+            "Sirf kuch messaging apps dekhe jate hain. OTP/password wale messages skip hote hain. Kuch save nahi hota aur Gemini ko nahi jata. Android mein Notification access bhi allow karna padta hai (Permissions guide).",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         SectionTitle("Voice")
         SwitchRow("Jawab bolke sunao (TTS)", speak) { speak = it; p.speakReplies = it }
         SwitchRow("Wake phrase (sirf Continuous mode mein)", wakeOn) { wakeOn = it; p.wakeEnabled = it }
+        OutlinedButton(onClick = {
+            try {
+                ctx.startActivity(Intent("com.android.settings.TTS_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: Exception) {
+                status = "TTS settings nahi khul payi. Android Settings mein 'Text-to-speech' dhoondho."
+            }
+        }) { Text("Awaaz / TTS engine chuno") }
         if (wakeOn) {
             OutlinedTextField(
                 value = wakePhrase,
@@ -216,6 +241,7 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
 
         SectionTitle("Privacy")
         SwitchRow("Chat history is phone par save karo", saveHistory) { saveHistory = it; p.saveHistory = it }
+        SwitchRow("App lock (PIN / pattern / fingerprint)", appLock) { appLock = it; p.appLock = it }
         Text("Gemini ko pichhli baatein (memory): ${memory.toInt()} exchanges", style = MaterialTheme.typography.bodyMedium)
         Slider(value = memory, onValueChange = { memory = it }, onValueChangeFinished = { p.memoryTurns = memory.toInt() }, valueRange = 0f..20f, steps = 19)
         OutlinedButton(onClick = onPermissions) { Text("Permissions guide") }

@@ -79,7 +79,7 @@ object Messaging {
         return hits
     }
 
-    private fun pick(ctx: Context, name: String): Pair<ContactHit?, String?> {
+    fun pick(ctx: Context, name: String): Pair<ContactHit?, String?> {
         if (!has(ctx, Manifest.permission.READ_CONTACTS)) {
             return null to "Contacts permission chahiye. KALU ke Permissions guide mein allow karo."
         }

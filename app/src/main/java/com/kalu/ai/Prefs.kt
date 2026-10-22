@@ -106,5 +106,24 @@ class Prefs(context: Context) {
         get() = sp.getString("creator", "") ?: ""
         set(v) = sp.edit().putString("creator", v.trim()).apply()
 
+    /** Use Google Search inside Gemini for current facts (news, weather, scores). */
+    var webSearch: Boolean
+        get() = sp.getBoolean("web_search", true)
+        set(v) = sp.edit().putBoolean("web_search", v).apply()
+
+    /** Send the things you asked KALU to remember to Gemini as context. */
+    var useMemory: Boolean
+        get() = sp.getBoolean("use_memory", true)
+        set(v) = sp.edit().putBoolean("use_memory", v).apply()
+
+    var appLock: Boolean
+        get() = sp.getBoolean("app_lock", false)
+        set(v) = sp.edit().putBoolean("app_lock", v).apply()
+
+    /** In-app consent for reading messaging notifications (also needs Notification access in Android). */
+    var notifAccess: Boolean
+        get() = sp.getBoolean("notif_access", false)
+        set(v) = sp.edit().putBoolean("notif_access", v).apply()
+
     fun resetAll() = sp.edit().clear().apply()
 }

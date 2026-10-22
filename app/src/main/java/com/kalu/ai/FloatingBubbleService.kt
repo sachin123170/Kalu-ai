@@ -310,6 +310,17 @@ class FloatingBubbleService : Service() {
                 val list = notes.load().take(5)
                 reply(if (list.isEmpty()) "Abhi koi note nahi hai." else "Tumhare notes: " + list.joinToString(". ") { it.text.take(60) })
             }
+            is Command.Remember -> reply(MoreActions.remember(this, cmd.text))
+            is Command.ShowMemory -> reply(MoreActions.showMemory(this))
+            is Command.Forget -> reply(MoreActions.forget(this, cmd.text))
+            is Command.AddEvent -> reply(MoreActions.addEvent(this, cmd.title, cmd.startMillis))
+            is Command.CallContact -> reply(MoreActions.call(this, cmd.name))
+            is Command.Navigate -> reply(MoreActions.navigate(this, cmd.place))
+            is Command.Media -> reply(MoreActions.media(this, cmd.action))
+            is Command.Briefing -> reply(MoreActions.briefing(this))
+            is Command.ReadMessages -> reply(NotifHelper.readLatest(this))
+            is Command.ReplyTo -> planMessage(NotifHelper.reply(this, cmd.name, cmd.body))
+            is Command.SummarizeScreen -> reply("Screen ka summary KALU app se maango, wahan pehle confirm poochha jata hai.")
             is Command.SendSms -> planMessage(Messaging.sms(this, cmd.name, cmd.body))
             is Command.SendWhatsApp -> planMessage(Messaging.whatsapp(this, cmd.name, cmd.body))
             else -> screen(cmd)
@@ -374,10 +385,10 @@ class FloatingBubbleService : Service() {
             return
         }
         showLabel("Soch raha hoon...")
-        val system = Persona.system(prefs, Mode.CHAT, feel) +
+        val system = Persona.system(prefs, Mode.CHAT, feel, MoreActions.factsForPrompt(this)) +
             "\nYou are answering through a voice bubble: reply in 1 to 3 short spoken sentences, no markdown, no lists, no code blocks."
         scope.launch {
-            when (val res = GeminiClient.generate(key, prefs.model, system, listOf("user" to text))) {
+            when (val res = GeminiClient.generate(key, prefs.model, system, listOf("user" to text), null, prefs.webSearch)) {
                 is GeminiResult.Ok -> reply(res.text)
                 is GeminiResult.Err -> reply(res.message)
             }

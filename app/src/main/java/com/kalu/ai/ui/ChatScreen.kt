@@ -4,6 +4,8 @@ package com.kalu.ai.ui
 
 import android.Manifest
 import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
 import android.net.Uri
 import android.provider.Settings
 import android.content.pm.PackageManager
@@ -92,7 +94,9 @@ fun ChatScreen(
     vm: ChatViewModel,
     onNotes: () -> Unit,
     onSettings: () -> Unit,
-    onPermissions: () -> Unit
+    onPermissions: () -> Unit,
+    autoListen: Boolean = false,
+    onAutoListenHandled: () -> Unit = {}
 ) {
     val ctx = LocalContext.current
     val activity = ctx as ComponentActivity
@@ -128,6 +132,29 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(autoListen) {
+        if (autoListen) {
+            withMic { vm.micTapped() }
+            onAutoListenHandled()
+        }
+    }
+
+    var showAttach by remember { mutableStateOf(false) }
+    val photoFile = remember { File(ctx.cacheDir, "photo.jpg") }
+    val photoUri = remember { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", photoFile) }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        if (ok) {
+            val b = ImageUtil.loadJpeg(ctx, photoUri)
+            if (b != null) vm.attachedImage = b else vm.notice = "Photo load nahi hui."
+        }
+    }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val b = ImageUtil.loadJpeg(ctx, uri)
+            if (b != null) vm.attachedImage = b else vm.notice = "Photo load nahi hui."
+        }
+    }
+
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) {
             try {
@@ -151,7 +178,7 @@ fun ChatScreen(
     }
 
     fun submit() {
-        if (input.isNotBlank()) {
+        if (input.isNotBlank() || vm.attachedImage != null) {
             vm.send(input)
             input = ""
         }
@@ -296,6 +323,22 @@ fun ChatScreen(
             if (vm.typing) item(key = "typing") { TypingIndicator() }
         }
 
+        if (vm.attachedImage != null) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "📎 Photo laga hai (ye Gemini/Google ko jayegi)",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { vm.attachedImage = null }) { Text("✕ Hatao") }
+            }
+        }
+
         // Input
         Row(
             Modifier
@@ -313,12 +356,25 @@ fun ChatScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { submit() })
             )
+            Box {
+                TextButton(onClick = { showAttach = true }) { Text("📎", fontSize = 22.sp) }
+                androidx.compose.material3.DropdownMenu(expanded = showAttach, onDismissRequest = { showAttach = false }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("📷 Camera se photo") },
+                        onClick = { showAttach = false; takePhoto.launch(photoUri) }
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("🖼 Gallery se photo") },
+                        onClick = { showAttach = false; pickPhoto.launch("image/*") }
+                    )
+                }
+            }
             TextButton(onClick = { withMic { vm.micTapped() } }) {
                 Text(if (vm.voiceState == VoiceState.LISTENING) "⏹" else "🎤", fontSize = 22.sp)
             }
             IconButton(
                 onClick = { submit() },
-                enabled = input.isNotBlank() && !vm.typing,
+                enabled = (input.isNotBlank() || vm.attachedImage != null) && !vm.typing,
                 modifier = Modifier.size(46.dp),
                 colors = IconButtonDefaults.iconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
