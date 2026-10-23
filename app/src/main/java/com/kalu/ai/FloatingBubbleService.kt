@@ -27,7 +27,11 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import ai.picovoice.porcupine.Porcupine
+import ai.picovoice.porcupine.PorcupineManager
+import ai.picovoice.porcupine.PorcupineManagerCallback
 import androidx.core.content.ContextCompat
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -71,6 +75,17 @@ class FloatingBubbleService : Service() {
     private var label: TextView? = null
     private var voiceState = VoiceState.IDLE
     private var awaiting: (() -> Unit)? = null
+    private val wakeHandler = Handler(Looper.getMainLooper())
+    private var porcupine: PorcupineManager? = null
+    private var wakeRunning = false
+    private var lastActivity = 0L
+    private var wakeBackoffUntil = 0L
+    private val wakeChecker = object : Runnable {
+        override fun run() {
+            maybeStartWake()
+            wakeHandler.postDelayed(this, 3000)
+        }
+    }
     private var feel = Feel.NEUTRAL
     private var awaitingAt = 0L
 
@@ -85,6 +100,7 @@ class FloatingBubbleService : Service() {
         super.onCreate()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         prefs = Prefs(applicationContext)
+        OfflineBrain.name = prefs.assistantName
         notes = NotesStore(applicationContext)
         voice = VoiceController(
             applicationContext,
@@ -117,6 +133,7 @@ class FloatingBubbleService : Service() {
         }
         createBubble()
         running.value = true
+        wakeHandler.postDelayed(wakeChecker, 2000)
         return START_NOT_STICKY
     }
 
@@ -194,6 +211,8 @@ class FloatingBubbleService : Service() {
     private fun lang() = if (prefs.language == "english") "en-IN" else "hi-IN"
 
     private fun onTap() {
+        lastActivity = System.currentTimeMillis()
+        stopWake()
         if (voiceState == VoiceState.LISTENING) {
             voice.stop()
             return
@@ -251,6 +270,7 @@ class FloatingBubbleService : Service() {
     }
 
     private fun reply(msg: String) {
+        lastActivity = System.currentTimeMillis()
         showLabel(msg)
         voice.speak(msg)
     }
@@ -258,6 +278,7 @@ class FloatingBubbleService : Service() {
     // ---------- understanding what you said ----------
 
     private fun handleSpoken(raw: String) {
+        lastActivity = System.currentTimeMillis()
         val text = raw.trim()
         if (text.isEmpty()) return
         showLabel("🗣 $text")
@@ -364,17 +385,75 @@ class FloatingBubbleService : Service() {
     private fun planMessage(plan: MsgPlan) {
         when (plan) {
             is MsgPlan.Error -> reply(plan.message)
-            is MsgPlan.Confirm -> ask(plan.prompt) {
-                reply(plan.run())
-                val svc = KaluAccess.service
-                if (plan.autoSendAfterMs > 0 && svc != null && KaluAccess.armed.value) {
-                    scope.launch {
-                        delay(plan.autoSendAfterMs)
-                        reply(svc.execute(Command.SendMessage))
+            is MsgPlan.Confirm -> {
+                val go = {
+                    reply(plan.run())
+                    val svc = KaluAccess.service
+                    if (plan.autoSendAfterMs > 0 && svc != null && KaluAccess.armed.value) {
+                        scope.launch {
+                            delay(plan.autoSendAfterMs)
+                            reply(svc.execute(Command.SendMessage))
+                        }
                     }
                 }
+                if (prefs.skipConfirm && prefs.isTrusted(plan.contact)) go()
+                else ask(plan.prompt) { go() }
             }
         }
+    }
+
+    // ---------- wake word (Picovoice Porcupine, runs on the phone) ----------
+
+    private fun maybeStartWake() {
+        if (!prefs.wakeEngine) {
+            stopWake()
+            return
+        }
+        if (wakeRunning) return
+        val now = System.currentTimeMillis()
+        if (voiceState != VoiceState.IDLE || awaiting != null) return
+        if (now - lastActivity < 6000 || now < wakeBackoffUntil) return
+        val key = prefs.secure.getSecret("picovoice").orEmpty()
+        if (key.isBlank()) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val builder = PorcupineManager.Builder().setAccessKey(key)
+            val custom = File(filesDir, "wake.ppn")
+            if (prefs.wakeCustom && custom.exists()) {
+                builder.setKeywordPath(custom.absolutePath)
+            } else {
+                builder.setKeyword(Porcupine.BuiltInKeyword.valueOf(prefs.wakeKeyword))
+            }
+            val callback = object : PorcupineManagerCallback {
+                override fun invoke(keywordIndex: Int) {
+                    wakeHandler.post { onWake() }
+                }
+            }
+            val manager = builder.build(applicationContext, callback)
+            manager.start()
+            porcupine = manager
+            wakeRunning = true
+        } catch (e: Exception) {
+            wakeBackoffUntil = now + 60_000
+            showLabel("Wake word shuru nahi hua: " + (e.message ?: "error").take(90))
+        }
+    }
+
+    private fun stopWake() {
+        try {
+            porcupine?.stop()
+            porcupine?.delete()
+        } catch (e: Exception) {
+        }
+        porcupine = null
+        wakeRunning = false
+    }
+
+    private fun onWake() {
+        stopWake()
+        lastActivity = System.currentTimeMillis()
+        showLabel("Haan, bolo...")
+        voice.listenOnce(lang())
     }
 
     private fun askGemini(text: String) {
@@ -397,6 +476,8 @@ class FloatingBubbleService : Service() {
 
     override fun onDestroy() {
         running.value = false
+        wakeHandler.removeCallbacksAndMessages(null)
+        stopWake()
         voice.destroy()
         handler.removeCallbacksAndMessages(null)
         hideLabel()

@@ -31,29 +31,35 @@ class SecureStore(context: Context) {
         return gen.generateKey()
     }
 
-    fun putApiKey(value: String) {
+    fun putSecret(name: String, value: String) {
         if (value.isBlank()) {
-            sp.edit().remove("api").apply()
+            sp.edit().remove(name).apply()
             return
         }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val iv = cipher.iv
         val ct = cipher.doFinal(value.trim().toByteArray(Charsets.UTF_8))
-        sp.edit().putString("api", Base64.encodeToString(iv + ct, Base64.NO_WRAP)).apply()
+        sp.edit().putString(name, Base64.encodeToString(iv + ct, Base64.NO_WRAP)).apply()
     }
 
-    fun getApiKey(): String? = try {
-        val raw = sp.getString("api", null) ?: throw IllegalStateException("no key")
-        val bytes = Base64.decode(raw, Base64.NO_WRAP)
-        val iv = bytes.copyOfRange(0, 12)
-        val ct = bytes.copyOfRange(12, bytes.size)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
-        String(cipher.doFinal(ct), Charsets.UTF_8)
-    } catch (e: Exception) {
-        null
+    fun getSecret(name: String): String? {
+        try {
+            val raw = sp.getString(name, null) ?: return null
+            val bytes = Base64.decode(raw, Base64.NO_WRAP)
+            val iv = bytes.copyOfRange(0, 12)
+            val ct = bytes.copyOfRange(12, bytes.size)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
+            return String(cipher.doFinal(ct), Charsets.UTF_8)
+        } catch (e: Exception) {
+            return null
+        }
     }
+
+    fun putApiKey(value: String) = putSecret("api", value)
+
+    fun getApiKey(): String? = getSecret("api")
 }
 
 /** Non-secret settings. The API key is NOT here; it goes through SecureStore. */
@@ -124,6 +130,44 @@ class Prefs(context: Context) {
     var notifAccess: Boolean
         get() = sp.getBoolean("notif_access", false)
         set(v) = sp.edit().putBoolean("notif_access", v).apply()
+
+    /** What the assistant is called inside the app (the launcher name is set in strings.xml). */
+    var assistantName: String
+        get() = sp.getString("assistant_name", "KALU") ?: "KALU"
+        set(v) = sp.edit().putString("assistant_name", v.trim().ifEmpty { "KALU" }).apply()
+
+    /** blue | purple | green | orange | pink | amoled */
+    var theme: String
+        get() = sp.getString("theme", "blue") ?: "blue"
+        set(v) = sp.edit().putString("theme", v).apply()
+
+    var wakeEngine: Boolean
+        get() = sp.getBoolean("wake_engine", false)
+        set(v) = sp.edit().putBoolean("wake_engine", v).apply()
+
+    /** Built-in Porcupine keyword name, e.g. JARVIS. */
+    var wakeKeyword: String
+        get() = sp.getString("wake_keyword", "JARVIS") ?: "JARVIS"
+        set(v) = sp.edit().putString("wake_keyword", v).apply()
+
+    var wakeCustom: Boolean
+        get() = sp.getBoolean("wake_custom", false)
+        set(v) = sp.edit().putBoolean("wake_custom", v).apply()
+
+    /** If ON, messages to the trusted names below are sent without asking "Pakka?". */
+    var skipConfirm: Boolean
+        get() = sp.getBoolean("skip_confirm", false)
+        set(v) = sp.edit().putBoolean("skip_confirm", v).apply()
+
+    var trustedContacts: String
+        get() = sp.getString("trusted", "") ?: ""
+        set(v) = sp.edit().putString("trusted", v).apply()
+
+    fun isTrusted(name: String): Boolean {
+        if (name.isBlank()) return false
+        val n = name.lowercase()
+        return trustedContacts.split(",").map { it.trim().lowercase() }.any { it.isNotEmpty() && n.contains(it) }
+    }
 
     fun resetAll() = sp.edit().clear().apply()
 }

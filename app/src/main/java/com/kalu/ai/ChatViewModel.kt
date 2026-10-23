@@ -50,6 +50,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     init {
+        OfflineBrain.name = prefs.assistantName
         if (prefs.saveHistory) messages.addAll(chatStore.load())
         notes.addAll(notesStore.load())
         nextId = (messages.maxOfOrNull { it.id } ?: 0L) + 1
@@ -191,19 +192,23 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private fun planMessage(plan: MsgPlan) {
         when (plan) {
             is MsgPlan.Error -> botSay(plan.message)
-            is MsgPlan.Confirm -> pending = Pending(plan.prompt) {
-                botSay(plan.run())
-                if (plan.autoSendAfterMs > 0) {
-                    val svc = KaluAccess.service
-                    if (svc != null && KaluAccess.armed.value) {
-                        viewModelScope.launch {
-                            delay(plan.autoSendAfterMs)
-                            botSay(svc.execute(Command.SendMessage))
+            is MsgPlan.Confirm -> {
+                val go = {
+                    botSay(plan.run())
+                    if (plan.autoSendAfterMs > 0) {
+                        val svc = KaluAccess.service
+                        if (svc != null && KaluAccess.armed.value) {
+                            viewModelScope.launch {
+                                delay(plan.autoSendAfterMs)
+                                botSay(svc.execute(Command.SendMessage))
+                            }
+                        } else {
+                            botSay("Chat khul gayi aur message likha hua hai. Send tum dabao, ya Screen control ON karke 'send karo' bolo.", speak = false)
                         }
-                    } else {
-                        botSay("Chat khul gayi aur message likha hua hai. Send tum dabao, ya Screen control ON karke 'send karo' bolo.", speak = false)
                     }
                 }
+                if (prefs.skipConfirm && prefs.isTrusted(plan.contact)) go()
+                else pending = Pending(plan.prompt) { go() }
             }
         }
     }
@@ -379,6 +384,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         clearNotes()
         MoreActions.clearFacts(ctx)
         prefs.secure.putApiKey("")
+        prefs.secure.putSecret("picovoice", "")
         prefs.resetAll()
         notice = "Saara data delete ho gaya."
     }

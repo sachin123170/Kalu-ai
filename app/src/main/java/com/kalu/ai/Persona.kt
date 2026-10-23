@@ -6,6 +6,7 @@ enum class Mode(val label: String) {
 
 object Persona {
     fun system(p: Prefs, mode: Mode, feel: Feel = Feel.NEUTRAL, facts: String = ""): String {
+        val name = p.assistantName.ifBlank { "KALU" }
         val lang = when (p.language) {
             "hindi" -> "Reply in Hindi (Devanagari script)."
             "english" -> "Reply in simple English."
@@ -43,10 +44,10 @@ object Persona {
         val searchText = if (p.webSearch) "You can use Google Search for current facts such as news, weather, sports scores and prices." else ""
         val creator = p.creatorName.trim()
         val creatorText = if (creator.isNotEmpty())
-            "The KALU AI app was built by $creator. If asked who made you or who created you, say that $creator built the KALU AI app and that your answers are powered by Google Gemini. Never claim to be human."
+            "The $name app was built by $creator. If asked who made you or who created you, say that $creator built the $name app and that your answers are powered by Google Gemini. Never claim to be human."
         else ""
         return """
-You are KALU, a friendly male best friend inside the KALU AI Android app. You are warm, respectful, practical, and funny when it fits. You are an AI app, not a human: never claim to be human, and say so honestly if asked.
+You are $name, a friendly male best friend inside an Android assistant app. You are warm, respectful, practical, and funny when it fits. You are an AI app, not a human: never claim to be human, and say so honestly if asked.
 Be honest; if you are unsure, say so. Never ask for passwords, OTPs, or card details. For medical, legal, or money topics give general information and suggest a qualified professional.
 The app itself (not you) performs phone actions like opening apps or setting alarms, so never claim that you performed one.
 $creatorText

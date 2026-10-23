@@ -141,3 +141,13 @@ Besides `Naam ko sms bhejo: ...`, KALU now understands looser sentences, e.g. `w
 - **Messages and replies (optional, off by default):** turn on "Messages padhne do" in KALU Settings and allow Notification access in Android. Then `naye messages padho` reads the last few messages from WhatsApp, Telegram, SMS and Instagram notifications, and `Rahul ko reply karo: kal milte hain` replies to that notification after you confirm. OTP/password messages are skipped, nothing is saved, nothing goes to Gemini.
 - **Voice:** Settings > Voice > "Awaaz / TTS engine chuno" opens Android's text-to-speech settings so you can pick the Google engine and a Hindi voice.
 - **Not built:** an always-on "Hey KALU" wake word. It needs the Picovoice Porcupine SDK plus a free AccessKey from console.picovoice.ai and a background microphone service.
+
+## v3.1
+MainActivity now also answers the system ASSIST action, so KALU can appear in Settings > Default digital assistant app even if the phone ignores the voice-interaction service. Choosing it makes the power-button long press open KALU listening.
+
+## v4.0
+- **Name:** Settings > "Naam aur theme" changes what the assistant calls itself inside the app (header, greeting, persona). To change the name under the app icon, edit `app/src/main/res/values/strings.xml` (`app_name`), e.g. `sed -i 's|<string name="app_name">KALU AI</string>|<string name="app_name">JARVIS</string>|' app/src/main/res/values/strings.xml`, then rebuild.
+- **Theme:** Blue, Purple, Green, Orange, Pink or AMOLED black, applied instantly.
+- **Wake word (optional):** uses Picovoice Porcupine, which runs on the phone. Needs a free AccessKey from console.picovoice.ai, saved in Settings. Works while the floating bubble is ON. Pick a built-in word (Jarvis, Computer...) or import a custom "Hey KALU" `.ppn` file made in the Picovoice console for Android. Battery use goes up because the microphone stays open.
+- **Trusted contacts:** Settings > "Bharose wale log". Messages to these names are sent without the "Pakka?" question. Off by default.
+- Settings > Battery tip: set KALU to "Unrestricted" battery in Android so it is not stopped in the background.

@@ -84,6 +84,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.kalu.ai.ChatMessage
 import com.kalu.ai.ChatViewModel
 import com.kalu.ai.FloatingBubbleService
+import com.kalu.ai.Feel
 import com.kalu.ai.KaluAccess
 import com.kalu.ai.Mode
 import com.kalu.ai.VoiceState
@@ -108,7 +109,8 @@ fun ChatScreen(
     val armed by KaluAccess.armed.collectAsState()
     val connected by KaluAccess.serviceConnected.collectAsState()
     val bubbleOn by FloatingBubbleService.running.collectAsState()
-    val orbTint by animateColorAsState(Color(vm.feel.colorArgb), label = "feel")
+    val orbBase = if (vm.feel == Feel.NEUTRAL) MaterialTheme.colorScheme.primary else Color(vm.feel.colorArgb)
+    val orbTint by animateColorAsState(orbBase, label = "feel")
     val messages = vm.messages
 
     DisposableEffect(activity) {
@@ -204,7 +206,7 @@ fun ChatScreen(
                     .weight(1f)
                     .padding(start = 12.dp)
             ) {
-                Text("KALU AI", style = MaterialTheme.typography.titleLarge)
+                Text(vm.prefs.assistantName, style = MaterialTheme.typography.titleLarge)
                 Text(
                     when {
                         vm.typing -> "soch raha hoon..."

@@ -113,7 +113,8 @@ object NotifHelper {
                 } catch (e: Exception) {
                     "Reply nahi bhej paya (notification hat gayi ho sakti hai)."
                 }
-            }
+            },
+            contact = m.sender
         )
     }
 }

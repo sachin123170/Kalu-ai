@@ -25,6 +25,7 @@ import com.kalu.ai.ui.KaluTheme
 import com.kalu.ai.ui.NotesScreen
 import com.kalu.ai.ui.PermissionsScreen
 import com.kalu.ai.ui.SettingsScreen
+import com.kalu.ai.ui.ThemeState
 
 enum class Screen { CHAT, SETTINGS, NOTES, PERMISSIONS }
 
@@ -44,7 +45,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(applicationContext)
         unlocked = !prefs.appLock
-        autoListen = intent?.getBooleanExtra("auto_listen", false) == true
+        ThemeState.name = prefs.theme
+        autoListen = intent?.getBooleanExtra("auto_listen", false) == true || intent?.action == Intent.ACTION_ASSIST
         enableEdgeToEdge()
         setContent {
             KaluTheme {
@@ -81,7 +83,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.getBooleanExtra("auto_listen", false)) autoListen = true
+        if (intent.getBooleanExtra("auto_listen", false) || intent.action == Intent.ACTION_ASSIST) autoListen = true
     }
 
     override fun onStart() {

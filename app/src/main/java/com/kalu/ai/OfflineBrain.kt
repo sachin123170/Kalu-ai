@@ -12,8 +12,11 @@ object OfflineBrain {
         "Main AI hoon, mujhe neend nahi aati. Par tumhe aani chahiye, bhai! 😴"
     )
 
+    @Volatile
+    var name = "KALU"
+
     fun greeting() =
-        "Namaste bhai! Main KALU hoon, tumhara AI dost. Main insaan nahi, ek app hoon, " +
+        "Namaste bhai! Main $name hoon, tumhara AI dost. Main insaan nahi, ek app hoon, " +
             "par poori koshish karunga ki tumhari madad kar sakoon. Kuch bhi poochho ya bolo: " +
             "\"open WhatsApp\", \"youtube par arijit ke gaane chalao\", \"7:30 baje alarm\"."
 
@@ -49,7 +52,7 @@ object OfflineBrain {
             has("joke", "chutkula") -> jokes.random()
             has("thanks", "thank", "shukriya", "dhanyavad") -> "Arre bhai, mention not! 🙌"
             t.contains("who are you") || t.contains("kaun ho") || t.contains("tumhara naam") ->
-                "Main KALU AI hoon, tumhara friendly AI dost. Insaan nahi, ek app hoon."
+                "Main $name hoon, tumhara friendly AI dost. Insaan nahi, ek app hoon."
             else -> timeOrDate(t)
         }
     }

@@ -20,7 +20,8 @@ sealed class MsgPlan {
         val prompt: String,
         val run: () -> String,
         /** > 0 means: after run(), try pressing the app's Send button after this many ms (needs screen control ON). */
-        val autoSendAfterMs: Long = 0L
+        val autoSendAfterMs: Long = 0L,
+        val contact: String = ""
     ) : MsgPlan()
 }
 
@@ -105,7 +106,8 @@ object Messaging {
             {
                 if (sendSms(ctx, hit.number, body)) "SMS bhej diya: ${hit.name} ko. (Delivery ki gaarantee nahi, SMS app mein dekh lena.)"
                 else "SMS nahi bhej paya."
-            }
+            },
+            contact = hit.name
         )
     }
 
@@ -118,7 +120,8 @@ object Messaging {
                 if (openWhatsApp(ctx, waNumber(hit.number), body)) "WhatsApp chat khol di, message likha hua hai."
                 else "WhatsApp nahi khul paya."
             },
-            autoSendAfterMs = 4000L
+            autoSendAfterMs = 4000L,
+            contact = hit.name
         )
     }
 

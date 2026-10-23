@@ -3,6 +3,10 @@
 package com.kalu.ai.ui
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.kalu.ai.OfflineBrain
+import java.io.File
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -62,6 +66,19 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
     var menu by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    val pickPpn = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            try {
+                ctx.contentResolver.openInputStream(uri)?.use { input ->
+                    File(ctx.filesDir, "wake.ppn").outputStream().use { out -> input.copyTo(out) }
+                }
+                p.wakeCustom = true
+                status = "Custom wake word file save ho gayi."
+            } catch (e: Exception) {
+                status = "File save nahi ho payi."
+            }
+        }
+    }
     var style by remember { mutableStateOf(p.style) }
     var language by remember { mutableStateOf(p.language) }
     var creator by remember { mutableStateOf(p.creatorName) }
@@ -70,6 +87,14 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
     var useMemory by remember { mutableStateOf(p.useMemory) }
     var appLock by remember { mutableStateOf(p.appLock) }
     var notifAccess by remember { mutableStateOf(p.notifAccess) }
+    var assistantName by remember { mutableStateOf(p.assistantName) }
+    var theme by remember { mutableStateOf(p.theme) }
+    var wakeEngine by remember { mutableStateOf(p.wakeEngine) }
+    var wakeKeyword by remember { mutableStateOf(p.wakeKeyword) }
+    var accessKeyInput by remember { mutableStateOf("") }
+    var hasAccessKey by remember { mutableStateOf(!p.secure.getSecret("picovoice").isNullOrBlank()) }
+    var skipConfirm by remember { mutableStateOf(p.skipConfirm) }
+    var trusted by remember { mutableStateOf(p.trustedContacts) }
     var speak by remember { mutableStateOf(p.speakReplies) }
     var wakeOn by remember { mutableStateOf(p.wakeEnabled) }
     var wakePhrase by remember { mutableStateOf(p.wakePhrase) }
@@ -203,6 +228,24 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
             mood
         ) { mood = it; p.mood = it }
 
+        SectionTitle("Naam aur theme")
+        OutlinedTextField(
+            value = assistantName,
+            onValueChange = { assistantName = it; p.assistantName = it; OfflineBrain.name = p.assistantName },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Assistant ka naam (app ke andar)") },
+            singleLine = true
+        )
+        Text(
+            "Phone ke launcher mein app ka naam badalne ke liye strings.xml mein app_name badalna padta hai (README dekho).",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ChipRow(
+            listOf("blue" to "Blue", "purple" to "Purple", "green" to "Green", "orange" to "Orange", "pink" to "Pink", "amoled" to "AMOLED black"),
+            theme
+        ) { theme = it; p.theme = it; ThemeState.name = it }
+
         SectionTitle("Smart features")
         SwitchRow("Live web search (Google Search se taaza jaankari)", webSearch) { webSearch = it; p.webSearch = it }
         SwitchRow("Meri yaadein Gemini ko bhejo (yaad rakho: ...)", useMemory) { useMemory = it; p.useMemory = it }
@@ -235,6 +278,59 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit, onPermissions: () -> U
         }
         Text(
             "Limit: wake phrase tabhi chalta hai jab app khula ho aur Continuous mode ON ho. Background mein hamesha sunne wala hotword Android par is app mein nahi hai.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        SectionTitle("Wake word (hamesha sunta rahe)")
+        SwitchRow("Wake word ON (sirf 🫧 Bubble chalu hone par kaam karta hai)", wakeEngine) { wakeEngine = it; p.wakeEngine = it }
+        Text(
+            if (hasAccessKey) "🔒 Picovoice AccessKey saved hai." else "Picovoice AccessKey chahiye (console.picovoice.ai par free account se).",
+            style = MaterialTheme.typography.bodySmall
+        )
+        OutlinedTextField(
+            value = accessKeyInput,
+            onValueChange = { accessKeyInput = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Picovoice AccessKey") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation()
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = accessKeyInput.isNotBlank(), onClick = {
+                p.secure.putSecret("picovoice", accessKeyInput)
+                accessKeyInput = ""
+                hasAccessKey = true
+                status = "AccessKey save ho gayi."
+            }) { Text("Save AccessKey") }
+            OutlinedButton(enabled = hasAccessKey, onClick = {
+                p.secure.putSecret("picovoice", "")
+                hasAccessKey = false
+                status = "AccessKey delete ho gayi."
+            }) { Text("Delete") }
+        }
+        ChipRow(
+            listOf("JARVIS" to "Jarvis", "COMPUTER" to "Computer", "PORCUPINE" to "Porcupine", "BUMBLEBEE" to "Bumblebee", "TERMINATOR" to "Terminator"),
+            wakeKeyword
+        ) { wakeKeyword = it; p.wakeKeyword = it; p.wakeCustom = false }
+        OutlinedButton(onClick = { pickPpn.launch("*/*") }) { Text("Custom 'Hey KALU' file (.ppn) chuno") }
+        Text(
+            "Wake word phone par hi pehchana jata hai. Bolne ke baad ka hissa Google ki speech service ko jata hai. Mic hamesha khula rehta hai isliye battery thodi zyada lagti hai. 'Hey KALU' jaise apne shabd ke liye Picovoice console par custom .ppn file (Android ke liye) banao aur yahan chuno.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        SectionTitle("Bharose wale log (bina confirm)")
+        SwitchRow("In logon ko SMS/WhatsApp bina poochhe bhejo", skipConfirm) { skipConfirm = it; p.skipConfirm = it }
+        OutlinedTextField(
+            value = trusted,
+            onValueChange = { trusted = it; p.trustedContacts = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Naam, comma se alag (jaise: mummy, papa)") },
+            singleLine = true
+        )
+        Text(
+            "Savdhan: agar mic ne naam galat suna to message galat bande ko ja sakta hai. Sirf wahi naam rakho jinhe bhejna sach mein surakshit ho.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
