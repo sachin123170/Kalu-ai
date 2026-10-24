@@ -51,6 +51,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         OfflineBrain.name = prefs.assistantName
+        ToolRouter.init(ctx)
         ActivityLog.init(ctx)
         Messaging.onResult = { msg ->
             ActivityLog.add(msg)

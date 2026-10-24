@@ -11,8 +11,22 @@ import java.util.Locale
  * and a global emergency stop. It only decides allow or block; it never sends anything itself.
  */
 object ToolRouter {
+    private var store: SharedPreferences? = null
+
+    /** Emergency-stop flag. It is saved, so it survives Android killing the app. */
     @Volatile
-    var paused = false
+    var paused: Boolean = false
+        set(value) {
+            field = value
+            store?.edit()?.putBoolean("paused", value)?.apply()
+        }
+
+    fun init(ctx: Context) {
+        if (store == null) {
+            store = ctx.applicationContext.getSharedPreferences("kalu_safety", Context.MODE_PRIVATE)
+            paused = store?.getBoolean("paused", false) ?: false
+        }
+    }
 
     private const val WINDOW_MS = 10 * 60_000L
     private const val MAX_PER_WINDOW = 5
