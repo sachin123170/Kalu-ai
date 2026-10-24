@@ -88,6 +88,14 @@ object CommandRouter {
     private val sendSet = setOf("send karo", "send kar do", "send", "bhej do", "bhejo", "send message")
     private val showNotes = setOf("mere notes", "notes dikhao", "show notes", "notes", "my notes", "notes dikha do")
 
+    private val bodyLead = Regex("^ki\\s+(?:ye\\s+)?", RegexOption.IGNORE_CASE)
+
+    /** "ki main late hoon" becomes "main late hoon". Keeps the original if nothing is left. */
+    private fun cleanBody(b: String): String {
+        val c = bodyLead.replaceFirst(b.trim(), "").trim()
+        return if (c.isEmpty()) b.trim() else c
+    }
+
     private fun words(s: String) = s.trim().split(Regex("\\s+")).size
 
     private val channelWa = setOf("whatsapp", "watsapp", "whatsap", "wa")
@@ -163,15 +171,15 @@ object CommandRouter {
 
         // Messaging (WhatsApp / SMS). Always confirmed with the user before anything is sent.
         Regex("^(.+?)\\s+ko\\s+(?:whatsapp|watsapp|wa)\\s+(?:message\\s+|msg\\s+)?(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
         Regex("^(?:whatsapp|watsapp)\\s+(?:to\\s+)?(\\S+)\\s*[:\\-]\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
         Regex("^(.+?)\\s+ko\\s+sms\\s+(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
         Regex("^sms\\s+(?:to\\s+)?(\\S+)\\s*[:\\-]\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
         Regex("^(.+?)\\s+ko\\s+(?:message|msg|text)\\s+(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
 
         flexibleMessage(s)?.let { return it }
 

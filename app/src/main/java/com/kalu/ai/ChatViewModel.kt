@@ -51,6 +51,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         OfflineBrain.name = prefs.assistantName
+        Messaging.onResult = { msg -> botSay(msg) }
         if (prefs.saveHistory) messages.addAll(chatStore.load())
         notes.addAll(notesStore.load())
         nextId = (messages.maxOfOrNull { it.id } ?: 0L) + 1
@@ -74,6 +75,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         addMsg(text, false)
         if (speak && (prefs.speakReplies || voice.continuous)) voice.speak(text) else voice.resume()
     }
+
+    private val yesWords = setOf(
+        "haan", "han", "ha", "haa", "yes", "ok", "okay", "theek hai", "thik hai", "kar do", "bhej do",
+        "bhejo", "send", "send karo", "send kar do", "confirm", "pakka", "haan bhej do", "haan kar do", "haan bhai"
+    )
+    private val noWords = setOf(
+        "nahi", "nahin", "na", "no", "cancel", "ruko", "ruk jao", "mat bhejo", "rehne do", "reh ne do", "stop", "band karo"
+    )
 
     private fun langCode() = if (prefs.language == "english") "en-IN" else "hi-IN"
 
@@ -120,6 +129,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             voice.resume(); return
         }
         addMsg(if (img != null) "📷 $text" else text, true)
+        if (pending != null) {
+            val ans = text.lowercase(Locale.ROOT).trim(' ', '.', '!', '?', ',')
+            if (ans in yesWords) {
+                confirmPending(); return
+            }
+            pending = null
+            if (ans in noWords) {
+                botSay("Theek hai, cancel kar diya."); return
+            }
+        }
         feel = FeelDetector.detect(text)
         voice.setTone(feel.rate, feel.pitch)
         if (img != null) {
@@ -208,7 +227,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 if (prefs.skipConfirm && prefs.isTrusted(plan.contact)) go()
-                else pending = Pending(plan.prompt) { go() }
+                else {
+                    pending = Pending(plan.prompt) { go() }
+                    botSay(plan.prompt + "\n\nHaan bolo ya button dabao, tab bhejunga. Nahi bhejna to 'cancel' bolo.")
+                }
             }
         }
     }
@@ -390,6 +412,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        Messaging.onResult = null
         voice.destroy()
         super.onCleared()
     }
