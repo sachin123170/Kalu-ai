@@ -44,6 +44,34 @@ object ToolRouter {
     private fun key(kind: String, name: String, body: String) =
         kind.lowercase(Locale.ROOT) + "|" + name.trim().lowercase(Locale.ROOT) + "|" + body.trim().lowercase(Locale.ROOT)
 
+    val stopPhrases = setOf(
+        "emergency stop", "emergency", "sab band karo", "sab kuch band karo", "kalu ruko", "kalu stop", "sab ruko"
+    )
+    val resumePhrases = setOf(
+        "kalu chalu karo", "kalu resume", "resume kalu", "emergency stop hatao", "emergency hatao"
+    )
+    val logPhrases = setOf("activity log", "log dikhao", "activity dikhao", "kalu ne kya kiya")
+
+    /** Handles stop, resume and log phrases. Returns a reply if the text was one of them, or if KALU is paused. */
+    fun control(raw: String): String? {
+        val low = raw.lowercase(Locale.ROOT).trim(' ', '.', '!', '?', ',')
+        return when {
+            low in stopPhrases -> {
+                paused = true
+                ActivityLog.add("EMERGENCY STOP")
+                "Emergency stop ON. Saare actions band. Wapas chalu karne ke liye 'kalu chalu karo' bolo."
+            }
+            low in resumePhrases -> {
+                paused = false
+                ActivityLog.add("Emergency stop hata diya")
+                "Theek hai, KALU wapas chalu hai."
+            }
+            low in logPhrases -> ActivityLog.recent()
+            paused -> "KALU abhi emergency stop mein hai. 'kalu chalu karo' bolo."
+            else -> null
+        }
+    }
+
     /** Returns null if the message may go ahead, otherwise a Hinglish reason it was blocked. */
     @Synchronized
     fun checkMessage(kind: String, name: String, body: String): String? {

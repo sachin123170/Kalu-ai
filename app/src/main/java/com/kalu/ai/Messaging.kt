@@ -30,9 +30,21 @@ sealed class MsgPlan {
 }
 
 object Messaging {
-    /** Called on the main thread with the REAL outcome of an SMS send. Set by ChatViewModel. */
-    @Volatile
-    var onResult: ((String) -> Unit)? = null
+    private val resultListeners = java.util.concurrent.CopyOnWriteArrayList<(String) -> Unit>()
+
+    /** Listeners get the REAL outcome of an SMS send, on the main thread. */
+    fun addResultListener(l: (String) -> Unit) {
+        resultListeners.addIfAbsent(l)
+    }
+
+    fun removeResultListener(l: (String) -> Unit) {
+        resultListeners.remove(l)
+    }
+
+    private fun emitResult(msg: String) {
+        ActivityLog.add(msg)
+        for (l in resultListeners) l(msg)
+    }
 
     private fun has(ctx: Context, p: String) =
         ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
@@ -176,7 +188,7 @@ object Messaging {
                             }
                             "SMS FAIL ho gaya ($label ko): $why. \u274C"
                         }
-                        onResult?.invoke(msg)
+                        emitResult(msg)
                     }
                 }
             }

@@ -88,6 +88,7 @@ class FloatingBubbleService : Service() {
     }
     private var feel = Feel.NEUTRAL
     private var awaitingAt = 0L
+    private val resultListener: (String) -> Unit = { msg -> reply(msg) }
 
     private val sensitive = listOf(
         "send", "bhej", "delete", "hatao", "remove", "pay", "buy", "purchase", "order", "checkout",
@@ -100,6 +101,8 @@ class FloatingBubbleService : Service() {
         super.onCreate()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         prefs = Prefs(applicationContext)
+        ToolRouter.init(applicationContext)
+        ActivityLog.init(applicationContext)
         OfflineBrain.name = prefs.assistantName
         notes = NotesStore(applicationContext)
         voice = VoiceController(
@@ -113,6 +116,7 @@ class FloatingBubbleService : Service() {
             onNotice = { showLabel(it) },
             onContinuousChanged = {}
         )
+        Messaging.addResultListener(resultListener)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -282,6 +286,14 @@ class FloatingBubbleService : Service() {
         val text = raw.trim()
         if (text.isEmpty()) return
         showLabel("🗣 $text")
+        ToolRouter.control(text)?.let {
+            if (ToolRouter.paused) {
+                awaiting = null
+                KaluAccess.disarm(this)
+            }
+            reply(it)
+            return
+        }
         feel = FeelDetector.detect(text)
         voice.setTone(feel.rate, feel.pitch)
         val pendingAction = awaiting
@@ -342,8 +354,8 @@ class FloatingBubbleService : Service() {
             is Command.ReadMessages -> reply(NotifHelper.readLatest(this))
             is Command.ReplyTo -> planMessage(NotifHelper.reply(this, cmd.name, cmd.body))
             is Command.SummarizeScreen -> reply("Screen ka summary KALU app se maango, wahan pehle confirm poochha jata hai.")
-            is Command.SendSms -> planMessage(Messaging.sms(this, cmd.name, cmd.body))
-            is Command.SendWhatsApp -> planMessage(Messaging.whatsapp(this, cmd.name, cmd.body))
+            is Command.SendSms -> guarded("sms", cmd.name, cmd.body) { Messaging.sms(this, cmd.name, cmd.body) }
+            is Command.SendWhatsApp -> guarded("whatsapp", cmd.name, cmd.body) { Messaging.whatsapp(this, cmd.name, cmd.body) }
             else -> screen(cmd)
         }
         return true
@@ -380,6 +392,23 @@ class FloatingBubbleService : Service() {
         val w = text.lowercase(Locale.ROOT).split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }.toSet()
         if (w.any { it in setOf("nahi", "nahin", "no", "mat", "cancel", "ruko") }) return false
         return w.any { it in setOf("haan", "han", "ha", "haa", "yes", "ok", "okay", "bhejo", "bhej", "karo", "kar") }
+    }
+
+    /** Safety checks first, then plan the message. The send is recorded only after the user confirms. */
+    private fun guarded(kind: String, name: String, body: String, make: () -> MsgPlan) {
+        ToolRouter.checkMessage(kind, name, body)?.let {
+            reply(it)
+            return
+        }
+        val plan = make()
+        if (plan is MsgPlan.Confirm) {
+            planMessage(plan.copy(run = {
+                ToolRouter.recordSend(kind, name, body)
+                plan.run()
+            }))
+        } else {
+            planMessage(plan)
+        }
     }
 
     private fun planMessage(plan: MsgPlan) {
@@ -476,6 +505,7 @@ class FloatingBubbleService : Service() {
 
     override fun onDestroy() {
         running.value = false
+        Messaging.removeResultListener(resultListener)
         wakeHandler.removeCallbacksAndMessages(null)
         stopWake()
         voice.destroy()

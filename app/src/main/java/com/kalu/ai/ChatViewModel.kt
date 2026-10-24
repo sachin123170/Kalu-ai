@@ -49,14 +49,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         onContinuousChanged = { continuous = it }
     )
 
+    private val resultListener: (String) -> Unit = { msg ->
+        botSay(msg, speak = !FloatingBubbleService.running.value)
+    }
+
     init {
         OfflineBrain.name = prefs.assistantName
         ToolRouter.init(ctx)
         ActivityLog.init(ctx)
-        Messaging.onResult = { msg ->
-            ActivityLog.add(msg)
-            botSay(msg)
-        }
+        Messaging.addResultListener(resultListener)
         if (prefs.saveHistory) messages.addAll(chatStore.load())
         notes.addAll(notesStore.load())
         nextId = (messages.maxOfOrNull { it.id } ?: 0L) + 1
@@ -466,7 +467,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
-        Messaging.onResult = null
+        Messaging.removeResultListener(resultListener)
         voice.destroy()
         super.onCleared()
     }
