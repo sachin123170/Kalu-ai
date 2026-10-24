@@ -51,7 +51,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         OfflineBrain.name = prefs.assistantName
-        Messaging.onResult = { msg -> botSay(msg) }
+        ActivityLog.init(ctx)
+        Messaging.onResult = { msg ->
+            ActivityLog.add(msg)
+            botSay(msg)
+        }
         if (prefs.saveHistory) messages.addAll(chatStore.load())
         notes.addAll(notesStore.load())
         nextId = (messages.maxOfOrNull { it.id } ?: 0L) + 1
@@ -83,6 +87,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val noWords = setOf(
         "nahi", "nahin", "na", "no", "cancel", "ruko", "ruk jao", "mat bhejo", "rehne do", "reh ne do", "stop", "band karo"
     )
+
+    private val stopPhrases = setOf(
+        "emergency stop", "emergency", "sab band karo", "sab kuch band karo", "kalu ruko", "kalu stop", "sab ruko"
+    )
+    private val resumePhrases = setOf(
+        "kalu chalu karo", "kalu resume", "resume kalu", "emergency stop hatao", "emergency hatao"
+    )
+    private val logPhrases = setOf("activity log", "log dikhao", "activity dikhao", "kalu ne kya kiya")
+
+    private fun emergencyStop() {
+        ToolRouter.paused = true
+        pending = null
+        KaluAccess.disarm(ctx)
+        ActivityLog.add("EMERGENCY STOP")
+        botSay("Emergency stop ON. Saare actions band. Wapas chalu karne ke liye 'kalu chalu karo' bolo.", speak = false)
+    }
 
     private fun langCode() = if (prefs.language == "english") "en-IN" else "hi-IN"
 
@@ -138,6 +158,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             if (ans in noWords) {
                 botSay("Theek hai, cancel kar diya."); return
             }
+        }
+        val low = text.lowercase(Locale.ROOT).trim(' ', '.', '!', '?', ',')
+        if (low in stopPhrases) {
+            emergencyStop(); return
+        }
+        if (low in resumePhrases) {
+            ToolRouter.paused = false
+            ActivityLog.add("Emergency stop hata diya")
+            botSay("Theek hai, KALU wapas chalu hai.")
+            return
+        }
+        if (low in logPhrases) {
+            botSay(ActivityLog.recent(), speak = false); return
+        }
+        if (ToolRouter.paused) {
+            botSay("KALU abhi emergency stop mein hai. 'kalu chalu karo' bolo.", speak = false); return
         }
         feel = FeelDetector.detect(text)
         voice.setTone(feel.rate, feel.pitch)
@@ -201,11 +237,28 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             is Command.ReadMessages -> botSay(NotifHelper.readLatest(ctx))
             is Command.ReplyTo -> planMessage(NotifHelper.reply(ctx, cmd.name, cmd.body))
             is Command.SummarizeScreen -> summarizeScreen()
-            is Command.SendSms -> planMessage(Messaging.sms(ctx, cmd.name, cmd.body))
-            is Command.SendWhatsApp -> planMessage(Messaging.whatsapp(ctx, cmd.name, cmd.body))
+            is Command.SendSms -> guarded("sms", cmd.name, cmd.body) { Messaging.sms(ctx, cmd.name, cmd.body) }
+            is Command.SendWhatsApp -> guarded("whatsapp", cmd.name, cmd.body) { Messaging.whatsapp(ctx, cmd.name, cmd.body) }
             else -> screenCommand(cmd)
         }
         return true
+    }
+
+    /** Runs the safety checks, then plans the message. The send is recorded only after the user confirms. */
+    private fun guarded(kind: String, name: String, body: String, make: () -> MsgPlan) {
+        ToolRouter.checkMessage(kind, name, body)?.let {
+            botSay(it)
+            return
+        }
+        val plan = make()
+        if (plan is MsgPlan.Confirm) {
+            planMessage(plan.copy(run = {
+                ToolRouter.recordSend(kind, name, body)
+                plan.run()
+            }))
+        } else {
+            planMessage(plan)
+        }
     }
 
     private fun planMessage(plan: MsgPlan) {
