@@ -1,5 +1,6 @@
 package com.kalu.ai
 
+import java.util.Calendar
 import java.util.Locale
 
 sealed class Command {
@@ -19,6 +20,17 @@ sealed class Command {
     data class ClickText(val text: String) : Command()
     data class TypeText(val text: String) : Command()
     object SendMessage : Command()
+    object ReadMessages : Command()
+    data class ReplyTo(val name: String, val body: String) : Command()
+    data class Remember(val text: String) : Command()
+    object ShowMemory : Command()
+    data class Forget(val text: String) : Command()
+    data class AddEvent(val title: String, val startMillis: Long) : Command()
+    data class CallContact(val name: String) : Command()
+    data class Navigate(val place: String) : Command()
+    data class Media(val action: String) : Command()
+    object Briefing : Command()
+    object SummarizeScreen : Command()
     data class SendSms(val name: String, val body: String) : Command()
     data class SendWhatsApp(val name: String, val body: String) : Command()
 }
@@ -33,16 +45,48 @@ object CommandRouter {
     private val down = setOf("scroll down", "neeche scroll karo", "niche scroll karo", "scroll karo", "neeche jao")
     private val up = setOf("scroll up", "upar scroll karo", "upar jao")
     private val read = setOf("read screen", "screen padho", "screen par kya hai", "screen read karo")
+    private val showMemorySet = setOf("meri yaadein", "mujhe kya yaad hai", "tumhe kya yaad hai", "kya yaad hai", "what do you remember")
+    private val briefingSet = setOf("briefing", "subah ka briefing", "aaj ka briefing", "aaj ka plan", "daily briefing")
+    private val mediaPause = setOf("pause", "pause karo", "gaana roko", "gaana pause karo", "music pause", "music roko")
+    private val mediaPlay = setOf("play karo", "gaana chalu karo", "music chalu karo")
+    private val mediaNext = setOf("next gaana", "agla gaana", "next song")
+    private val mediaPrev = setOf("previous gaana", "pichla gaana", "previous song")
+
+    private val eventStop = setOf(
+        "calendar", "mein", "me", "add", "karo", "kar", "do", "daal", "daalo", "dal", "event", "bana", "banao",
+        "kal", "aaj", "parso", "baje", "bje", "pm", "am", "subah", "shaam", "raat", "dopahar", "ko", "ka", "ki", "ke",
+        "set", "jod", "for", "at", "on", "tomorrow", "today", "save", "a", "the", "to"
+    )
+
+    private fun eventTitle(t: String): String {
+        val timeLike = Regex("\\d{1,2}([:.]\\d{2})?(am|pm)?")
+        val kept = t.split(Regex("\\s+")).filter { it.isNotEmpty() && it !in eventStop && !it.matches(timeLike) }
+        val title = kept.joinToString(" ").trim()
+        return if (title.isEmpty()) "KALU event" else title.replaceFirstChar { it.uppercase() }
+    }
+
+    private fun eventTime(t: String, h: Int, m: Int): Long {
+        val c = Calendar.getInstance()
+        val off = when {
+            t.contains("parso") -> 2
+            Regex("\\b(kal|tomorrow)\\b").containsMatchIn(t) -> 1
+            else -> 0
+        }
+        c.add(Calendar.DAY_OF_YEAR, off)
+        c.set(Calendar.HOUR_OF_DAY, h)
+        c.set(Calendar.MINUTE, m)
+        c.set(Calendar.SECOND, 0)
+        c.set(Calendar.MILLISECOND, 0)
+        if (off == 0 && c.timeInMillis < System.currentTimeMillis()) c.add(Calendar.DAY_OF_YEAR, 1)
+        return c.timeInMillis
+    }
+
+    private val readMsgSet = setOf(
+        "naye messages", "naye messages padho", "messages padho", "message padho", "koi message aaya",
+        "kisi ka message aaya", "notifications padho", "whatsapp messages padho"
+    )
     private val sendSet = setOf("send karo", "send kar do", "send", "bhej do", "bhejo", "send message")
     private val showNotes = setOf("mere notes", "notes dikhao", "show notes", "notes", "my notes", "notes dikha do")
-
-    private val bodyLead = Regex("^ki\\s+(?:ye\\s+)?", RegexOption.IGNORE_CASE)
-
-    /** "ki main late hoon" becomes "main late hoon". Keeps the original if nothing is left. */
-    private fun cleanBody(b: String): String {
-        val c = bodyLead.replaceFirst(b.trim(), "").trim()
-        return if (c.isEmpty()) b.trim() else c
-    }
 
     private fun words(s: String) = s.trim().split(Regex("\\s+")).size
 
@@ -100,6 +144,13 @@ object CommandRouter {
             in read -> return Command.ReadScreen
             in showNotes -> return Command.ShowNotes
             in sendSet -> return Command.SendMessage
+            in readMsgSet -> return Command.ReadMessages
+            in showMemorySet -> return Command.ShowMemory
+            in briefingSet -> return Command.Briefing
+            in mediaPause -> return Command.Media("pause")
+            in mediaPlay -> return Command.Media("play")
+            in mediaNext -> return Command.Media("next")
+            in mediaPrev -> return Command.Media("prev")
         }
 
         // Notes
@@ -112,15 +163,15 @@ object CommandRouter {
 
         // Messaging (WhatsApp / SMS). Always confirmed with the user before anything is sent.
         Regex("^(.+?)\\s+ko\\s+(?:whatsapp|watsapp|wa)\\s+(?:message\\s+|msg\\s+)?(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
         Regex("^(?:whatsapp|watsapp)\\s+(?:to\\s+)?(\\S+)\\s*[:\\-]\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
         Regex("^(.+?)\\s+ko\\s+sms\\s+(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
+            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), it.groupValues[2].trim()) }
         Regex("^sms\\s+(?:to\\s+)?(\\S+)\\s*[:\\-]\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
+            .find(s)?.let { return Command.SendSms(it.groupValues[1].trim(), it.groupValues[2].trim()) }
         Regex("^(.+?)\\s+ko\\s+(?:message|msg|text)\\s+(?:bhejo|karo|bhej do|kar do|likho)\\s*[:\\-]?\\s*(.+)$", I)
-            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), cleanBody(it.groupValues[2])) }
+            .find(s)?.let { return Command.SendWhatsApp(it.groupValues[1].trim(), it.groupValues[2].trim()) }
 
         flexibleMessage(s)?.let { return it }
 
@@ -130,6 +181,47 @@ object CommandRouter {
         }
         Regex("^(?:type karo|type kar do|likh do|likho)\\s+(.+)$", I).find(s)?.let {
             return Command.TypeText(it.groupValues[1].trim())
+        }
+
+        // Memory
+        Regex("^(?:yaad rakho|yaad rakh|yaad rakhna|yaad kar lo|remember(?: that)?)\\s*[:\\-]?\\s*(.+)$", I).find(s)?.let {
+            return Command.Remember(it.groupValues[1].trim())
+        }
+        Regex("^(?:bhool jao|bhul jao|forget)\\s*[:\\-]?\\s*(.+)$", I).find(s)?.let {
+            return Command.Forget(it.groupValues[1].trim())
+        }
+
+        // Calendar event (opens the Calendar app pre-filled; you press Save)
+        if (t.contains("calendar") && listOf("add", "daal", "bana", "jod", "set", "event", "save").any { t.contains(it) }) {
+            parseTime(t)?.let { hm -> return Command.AddEvent(eventTitle(t), eventTime(t, hm.first, hm.second)) }
+        }
+
+        // Call (opens the dialer; you press the call button)
+        Regex("^(.+?)\\s+ko\\s+(?:call|phone|fone)\\s+(?:karo|lagao|kar do|laga do)$", I).find(s)?.let {
+            return Command.CallContact(it.groupValues[1].trim())
+        }
+        if (words(s) <= 4) {
+            Regex("^(?:call|phone)\\s+(.+)$", I).find(s)?.let { return Command.CallContact(it.groupValues[1].trim()) }
+        }
+
+        // Maps
+        Regex("^(?:navigate to|navigate|directions to|route to)\\s+(.+)$", I).find(s)?.let {
+            return Command.Navigate(it.groupValues[1].trim())
+        }
+        Regex("^(.+?)\\s+(?:ka raasta|ka rasta|ka route|tak ka raasta|jane ka raasta)(?:\\s+(?:batao|dikhao|bata do|dikha do))?$", I)
+            .find(s)?.let { return Command.Navigate(it.groupValues[1].trim()) }
+
+        // Summarize what is on screen (needs screen control; confirmed first)
+        if (words(s) <= 8 && Regex("(screen|page).*(summary|summarize|samjhao|saaransh)|(summary|summarize).*(screen|page)", I).containsMatchIn(s)) {
+            return Command.SummarizeScreen
+        }
+
+        // Reply to a message notification (confirmed first)
+        Regex("^(.+?)\\s+ko\\s+reply\\s+(?:karo|bhejo|do|kar do)\\s*[:\\-]?\\s*(.+)$", I).find(s)?.let {
+            return Command.ReplyTo(it.groupValues[1].trim(), it.groupValues[2].trim())
+        }
+        Regex("^reply\\s+(?:to\\s+)?(\\S+)\\s*[:\\-]\\s*(.+)$", I).find(s)?.let {
+            return Command.ReplyTo(it.groupValues[1].trim(), it.groupValues[2].trim())
         }
 
         // Timer
