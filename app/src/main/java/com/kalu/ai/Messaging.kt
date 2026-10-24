@@ -1,8 +1,12 @@
 package com.kalu.ai
 
 import android.Manifest
+import android.app.Activity
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -20,12 +24,15 @@ sealed class MsgPlan {
         val prompt: String,
         val run: () -> String,
         /** > 0 means: after run(), try pressing the app's Send button after this many ms (needs screen control ON). */
-        val autoSendAfterMs: Long = 0L,
-        val contact: String = ""
+        val autoSendAfterMs: Long = 0L
     ) : MsgPlan()
 }
 
 object Messaging {
+    /** Called on the main thread with the REAL outcome of an SMS send. Set by ChatViewModel. */
+    @Volatile
+    var onResult: ((String) -> Unit)? = null
+
     private fun has(ctx: Context, p: String) =
         ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
 
@@ -80,7 +87,7 @@ object Messaging {
         return hits
     }
 
-    fun pick(ctx: Context, name: String): Pair<ContactHit?, String?> {
+    private fun pick(ctx: Context, name: String): Pair<ContactHit?, String?> {
         if (!has(ctx, Manifest.permission.READ_CONTACTS)) {
             return null to "Contacts permission chahiye. KALU ke Permissions guide mein allow karo."
         }
@@ -104,10 +111,9 @@ object Messaging {
         return MsgPlan.Confirm(
             "${hit.name} (${hit.number}) ko SMS bhejun?\n\n\"$body\"",
             {
-                if (sendSms(ctx, hit.number, body)) "SMS bhej diya: ${hit.name} ko. (Delivery ki gaarantee nahi, SMS app mein dekh lena.)"
+                if (sendSms(ctx, hit.number, body, hit.name)) "SMS system ko de diya: ${hit.name} ko. Asli result abhi batata hoon..."
                 else "SMS nahi bhej paya."
-            },
-            contact = hit.name
+            }
         )
     }
 
@@ -120,8 +126,7 @@ object Messaging {
                 if (openWhatsApp(ctx, waNumber(hit.number), body)) "WhatsApp chat khol di, message likha hua hai."
                 else "WhatsApp nahi khul paya."
             },
-            autoSendAfterMs = 4000L,
-            contact = hit.name
+            autoSendAfterMs = 4000L
         )
     }
 
@@ -138,15 +143,59 @@ object Messaging {
     }
 
     @Suppress("DEPRECATION")
-    private fun sendSms(ctx: Context, number: String, body: String): Boolean = try {
-        val sm: SmsManager = (if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(SmsManager::class.java) else null)
-            ?: SmsManager.getDefault()
-        val parts = sm.divideMessage(body)
-        if (parts.size > 1) sm.sendMultipartTextMessage(number, null, parts, null, null)
-        else sm.sendTextMessage(number, null, body, null, null)
-        true
-    } catch (e: Exception) {
-        false
+    private fun sendSms(ctx: Context, number: String, body: String, label: String): Boolean {
+        val app = ctx.applicationContext
+        var receiver: BroadcastReceiver? = null
+        return try {
+            val sm: SmsManager = (if (Build.VERSION.SDK_INT >= 31) app.getSystemService(SmsManager::class.java) else null)
+                ?: SmsManager.getDefault()
+            val parts = sm.divideMessage(body)
+            val total = parts.size
+            val action = "com.kalu.ai.SMS_SENT." + System.nanoTime()
+            var done = 0
+            var badCode = 0
+            val r = object : BroadcastReceiver() {
+                override fun onReceive(c: Context, i: Intent) {
+                    done++
+                    if (resultCode != Activity.RESULT_OK) badCode = resultCode
+                    if (done >= total) {
+                        try {
+                            app.unregisterReceiver(this)
+                        } catch (e: Exception) {
+                        }
+                        val msg = if (badCode == 0) {
+                            "SMS network ko pahunch gaya: $label ko. \u2705 (Samne wale tak delivery ki gaarantee nahi.)"
+                        } else {
+                            val why = when (badCode) {
+                                SmsManager.RESULT_ERROR_NO_SERVICE -> "network ya SIM service nahi hai"
+                                SmsManager.RESULT_ERROR_RADIO_OFF -> "airplane mode ya radio band hai"
+                                else -> "phone ya SIM ne SMS roka (code $badCode)"
+                            }
+                            "SMS FAIL ho gaya ($label ko): $why. \u274C"
+                        }
+                        onResult?.invoke(msg)
+                    }
+                }
+            }
+            receiver = r
+            if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(r, IntentFilter(action), Context.RECEIVER_NOT_EXPORTED)
+            else app.registerReceiver(r, IntentFilter(action))
+            val pi = PendingIntent.getBroadcast(
+                app, 0, Intent(action).setPackage(app.packageName),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            if (total > 1) sm.sendMultipartTextMessage(number, null, parts, ArrayList(List(total) { pi }), null)
+            else sm.sendTextMessage(number, null, body, pi, null)
+            true
+        } catch (e: Exception) {
+            receiver?.let {
+                try {
+                    app.unregisterReceiver(it)
+                } catch (x: Exception) {
+                }
+            }
+            false
+        }
     }
 
     private fun openWhatsApp(ctx: Context, number: String, text: String): Boolean {
