@@ -32,6 +32,7 @@ class VoiceController(
     private var lang = "hi-IN"
     private var listening = false
     private var errorStreak = 0
+    private var afterAction: (() -> Unit)? = null
 
     var continuous = false
         private set
@@ -84,6 +85,7 @@ class VoiceController(
     fun stop() {
         setContinuous(false)
         listening = false
+        afterAction = null
         main.removeCallbacksAndMessages(null)
         recognizer?.destroy()
         recognizer = null
@@ -103,7 +105,13 @@ class VoiceController(
         tts?.setPitch(pitch)
     }
 
-    fun speak(raw: String) {
+    fun speak(raw: String) = speakInternal(raw, null)
+
+    /** Speaks, then runs [then] on the main thread once speech has finished (or could not start). */
+    fun speakThen(raw: String, then: () -> Unit) = speakInternal(raw, then)
+
+    private fun speakInternal(raw: String, then: (() -> Unit)?) {
+        afterAction = then
         val clean = sanitize(raw)
         val t = tts
         if (!ttsReady || t == null || clean.isBlank()) {
@@ -120,7 +128,9 @@ class VoiceController(
 
     private fun afterSpeak() {
         onState(VoiceState.IDLE)
-        resume()
+        val a = afterAction
+        afterAction = null
+        if (a != null) a() else resume()
     }
 
     private fun sanitize(s: String): String =

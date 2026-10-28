@@ -138,7 +138,7 @@ class FloatingBubbleService : Service() {
         createBubble()
         running.value = true
         wakeHandler.postDelayed(wakeChecker, 2000)
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     @Suppress("DEPRECATION")
@@ -299,9 +299,10 @@ class FloatingBubbleService : Service() {
         val pendingAction = awaiting
         if (pendingAction != null) {
             awaiting = null
-            if (System.currentTimeMillis() - awaitingAt < 60000 && isYes(text)) pendingAction()
-            else reply("Theek hai, cancel kar diya.")
-            return
+            if (System.currentTimeMillis() - awaitingAt < 60000) {
+                if (isYes(text)) pendingAction() else reply("Theek hai, cancel kar diya.")
+                return
+            }
         }
         val cmd = CommandRouter.parse(text)
         if (cmd != null && runCommand(cmd)) return
@@ -385,7 +386,10 @@ class FloatingBubbleService : Service() {
     private fun ask(prompt: String, action: () -> Unit) {
         awaiting = action
         awaitingAt = System.currentTimeMillis()
-        reply("$prompt Bubble tap karke 'haan' ya 'nahi' bolo.")
+        lastActivity = awaitingAt
+        val msg = "$prompt Haan ya nahi bolo."
+        showLabel(msg)
+        listenAfterSpeaking(msg)
     }
 
     private fun isYes(text: String): Boolean {
@@ -440,7 +444,7 @@ class FloatingBubbleService : Service() {
         }
         if (wakeRunning) return
         val now = System.currentTimeMillis()
-        if (voiceState != VoiceState.IDLE || awaiting != null) return
+        if (voiceState != VoiceState.IDLE) return
         if (now - lastActivity < 6000 || now < wakeBackoffUntil) return
         val key = prefs.secure.getSecret("picovoice").orEmpty()
         if (key.isBlank()) return
@@ -481,8 +485,18 @@ class FloatingBubbleService : Service() {
     private fun onWake() {
         stopWake()
         lastActivity = System.currentTimeMillis()
-        showLabel("Haan, bolo...")
-        voice.listenOnce(lang())
+        showLabel("Haan bhai, bol!")
+        listenAfterSpeaking("Haan bhai, bol!")
+    }
+
+    /** Speaks [msg], then opens the mic by itself, so no tap is needed. */
+    private fun listenAfterSpeaking(msg: String) {
+        voice.speakThen(msg) {
+            lastActivity = System.currentTimeMillis()
+            wakeHandler.postDelayed({
+                if (voiceState == VoiceState.IDLE) voice.listenOnce(lang())
+            }, 300)
+        }
     }
 
     private fun askGemini(text: String) {
